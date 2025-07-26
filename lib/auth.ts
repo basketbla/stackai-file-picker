@@ -48,13 +48,57 @@ export function getStoredToken(): string | null {
 export function storeToken(token: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem("stack_ai_token", token);
+  // Also store in cookie for server-side access
+  document.cookie = `stack_ai_token=${token}; path=/; max-age=${
+    60 * 60 * 24 * 7
+  }; samesite=lax`;
 }
 
 export function clearToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem("stack_ai_token");
+  // Also clear the cookie
+  document.cookie =
+    "stack_ai_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 }
 
 export function extractTokenFromAuthHeader(authHeader: string): string {
   return authHeader.replace("Bearer ", "");
+}
+
+// Server-side cookie utilities
+export function getTokenFromCookies(cookieString?: string): string | null {
+  if (typeof window !== "undefined") {
+    // Client-side
+    const cookies = document.cookie.split(";");
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split("=");
+      if (name === "stack_ai_token") {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  // Server-side
+  if (!cookieString) return null;
+
+  const cookies = cookieString.split(";");
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split("=");
+    if (name === "stack_ai_token") {
+      return value;
+    }
+  }
+  return null;
+}
+
+// Server-side authenticated client
+export async function createServerAuthenticatedClient(token: string) {
+  const { StackAiClient } = await import("../stack-api-autogen");
+
+  return new StackAiClient({
+    BASE: process.env.NEXT_PUBLIC_API_URL,
+    TOKEN: token,
+  });
 }
