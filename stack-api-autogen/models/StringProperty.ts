@@ -1,0 +1,15 @@
+/* generated using openapi-typescript-codegen -- do not edit */
+/* istanbul ignore file */
+/* tslint:disable */
+/* eslint-disable */
+import type { StringSubtypeEnum } from './StringSubtypeEnum';
+export type StringProperty = {
+    type?: string;
+    description?: string;
+    /**
+     * Order of the property in the schema, used for sorting in the frontend
+     */
+    order?: number;
+    subtype?: StringSubtypeEnum;
+};
+
