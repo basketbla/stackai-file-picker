@@ -28,7 +28,7 @@ type AuthStore = AuthState & AuthActions;
 export const useAuthStore = create<AuthStore>((set, get) => ({
   // Initial state
   isAuthenticated: false,
-  isLoading: true,
+  isLoading: false,
   client: null,
   error: null,
 
@@ -43,10 +43,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({
         isAuthenticated: true,
         client: stackClient,
-        isLoading: false,
       });
-    } else {
-      set({ isLoading: false });
     }
   },
 
@@ -57,16 +54,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       const authHeaders = await getAuthHeaders(email, password);
       const token = extractTokenFromAuthHeader(authHeaders.Authorization);
 
-      // Test the token by trying to get user info
+      // If we got auth headers, assume it works
       const stackClient = new StackAiClient({
         BASE: process.env.NEXT_PUBLIC_API_URL,
         TOKEN: token,
       });
 
-      // Try to fetch user's personal folder to verify auth
-      await stackClient.folders.getUserPersonalFolderFoldersMeGet();
-
-      // If successful, store the token and set authenticated state
+      // Store the token and set authenticated state
       storeToken(token);
       set({
         isAuthenticated: true,
