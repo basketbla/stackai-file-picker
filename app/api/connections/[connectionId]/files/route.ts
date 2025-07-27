@@ -2,6 +2,7 @@ import {
   createServerAuthenticatedClient,
   getTokenFromCookies,
 } from "@/lib/auth";
+import { ApiError } from "@/stack-api-autogen";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -31,6 +32,9 @@ export async function GET(
 
     return NextResponse.json(filesResponse.data || []);
   } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Failed to fetch connection files:", error);
     return NextResponse.json(
       { error: "Failed to fetch files" },

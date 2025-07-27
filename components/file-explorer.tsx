@@ -1,5 +1,6 @@
 "use client";
 
+import { logoutAndRedirect } from "@/lib/auth";
 import { ConnectionCard, StackDirectory, StackFile } from "@/stack-api-autogen";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { File, FileText, Folder } from "lucide-react";
@@ -43,9 +44,7 @@ interface FileExplorerProps {
 
 function LogoutButton() {
   const handleLogout = () => {
-    document.cookie =
-      "stack_ai_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    window.location.href = "/login";
+    logoutAndRedirect();
   };
 
   return (
@@ -60,6 +59,10 @@ async function fetchConnectionFiles(
 ): Promise<(StackFile | StackDirectory)[]> {
   const response = await fetch(`/api/connections/${connectionId}/files`);
   if (!response.ok) {
+    if (response.status === 401) {
+      await logoutAndRedirect();
+      throw new Error("Unauthorized");
+    }
     throw new Error("Failed to fetch files");
   }
   return response.json();

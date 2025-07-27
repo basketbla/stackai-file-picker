@@ -3,13 +3,26 @@ import {
   createServerAuthenticatedClient,
   getTokenFromCookies,
 } from "@/lib/auth";
-import { ConnectionCard, StackDirectory, StackFile } from "@/stack-api-autogen";
+import {
+  ApiError,
+  ConnectionCard,
+  StackDirectory,
+  StackFile,
+} from "@/stack-api-autogen";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 interface ServerData {
   connections: ConnectionCard[];
   selectedConnection: ConnectionCard | null;
   files: (StackFile | StackDirectory)[];
+}
+
+function isUnauthorizedError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return error.status === 401;
+  }
+  return false;
 }
 
 async function loadServerData(token: string): Promise<ServerData> {
@@ -40,6 +53,9 @@ async function loadServerData(token: string): Promise<ServerData> {
           files: filesResponse.data || [],
         };
       } catch (filesError) {
+        if (isUnauthorizedError(filesError)) {
+          redirect("/api/auth/server-logout");
+        }
         console.error("Failed to load files for connection:", filesError);
         return {
           connections: connectionList,
@@ -55,6 +71,9 @@ async function loadServerData(token: string): Promise<ServerData> {
       files: [],
     };
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      redirect("/api/auth/server-logout");
+    }
     console.error("Failed to load server data:", error);
     return {
       connections: [],

@@ -62,6 +62,22 @@ export function clearToken(): void {
     "stack_ai_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 }
 
+// Client-side logout function that calls the logout route and redirects
+export async function logoutAndRedirect(): Promise<void> {
+  try {
+    // Call the logout route to clear server-side cookies
+    await fetch("/api/auth/logout", { method: "POST" });
+  } catch (error) {
+    console.error("Error calling logout route:", error);
+  }
+  
+  // Clear client-side storage
+  clearToken();
+  
+  // Redirect to login
+  window.location.href = "/login";
+}
+
 export function extractTokenFromAuthHeader(authHeader: string): string {
   return authHeader.replace("Bearer ", "");
 }
