@@ -14,7 +14,7 @@ import {
   unindexFiles,
 } from "@/lib/file-explorer-helpers";
 import { StackDirectory, StackFile } from "@/stack-api-autogen";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   Check,
   ChevronLeft,
@@ -27,7 +27,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
@@ -209,8 +209,6 @@ export default function FileExplorer() {
     return () => clearTimeout(timer);
   }, [searchSortFilter.searchQuery]);
 
-  const queryClient = useQueryClient();
-
   const {
     data: paginatedData,
     isLoading,
@@ -232,7 +230,10 @@ export default function FileExplorer() {
     enabled: !!selectedConnectionId,
   });
 
-  const rawFiles = paginatedData?.data || [];
+  const rawFiles = useMemo(
+    () => paginatedData?.data || [],
+    [paginatedData?.data]
+  );
 
   // Apply client-side sorting and filtering
   const files = React.useMemo(() => {
@@ -314,10 +315,8 @@ export default function FileExplorer() {
   const handleNextPage = () => {
     if (hasMore) {
       setCurrentPage((prev) => prev + 1);
-      // In a real API, you'd get the cursor from the response
-      // For now, we'll simulate it
       setCursor(`page-${currentPage + 1}`);
-      setSelectedFiles(new Set()); // Clear selection when changing pages
+      setSelectedFiles(new Set());
     }
   };
 
@@ -325,14 +324,8 @@ export default function FileExplorer() {
     if (currentPage > 1) {
       setCurrentPage((prev) => prev - 1);
       setCursor(currentPage > 2 ? `page-${currentPage - 1}` : undefined);
-      setSelectedFiles(new Set()); // Clear selection when changing pages
+      setSelectedFiles(new Set());
     }
-  };
-
-  const handleGoToPage = (page: number) => {
-    setCurrentPage(page);
-    setCursor(page > 1 ? `page-${page}` : undefined);
-    setSelectedFiles(new Set()); // Clear selection when changing pages
   };
 
   const handleIndexFiles = async () => {
