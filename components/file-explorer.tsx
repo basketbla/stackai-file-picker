@@ -127,10 +127,12 @@ function FileIconComponent({ file }: { file: StackFile | StackDirectory }) {
   return <File className="h-4 w-4 text-gray-500" />;
 }
 
-function renderIndexingStatus(
-  status: IndexingStatus,
-  indexedAt?: string
-): React.JSX.Element {
+interface IndexingStatusBadgeProps {
+  status: IndexingStatus;
+  indexedAt?: string;
+}
+
+function IndexingStatusBadge({ status, indexedAt }: IndexingStatusBadgeProps) {
   switch (status) {
     case "indexed":
       return (
@@ -545,373 +547,6 @@ export default function FileExplorer() {
     return flattened;
   };
 
-  // TODO: inline function call isn't great, fix
-  const renderFilesContent = () => {
-    if (error) {
-      return (
-        <div className="text-center py-8 text-destructive">
-          <p>Failed to load files.</p>
-          <p className="text-sm text-muted-foreground">
-            Please try again later.
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead
-              style={{
-                minWidth: columnDefinitions[0].size,
-                maxWidth: columnDefinitions[0].size,
-                width: columnDefinitions[0].size,
-              }}
-            >
-              <Checkbox
-                checked={
-                  selectedFiles.size === getFlattenedFiles().length &&
-                  getFlattenedFiles().length > 0
-                }
-                disabled={isOperationInProgress}
-                onCheckedChange={(checked: boolean) => {
-                  if (checked) {
-                    setSelectedFiles(
-                      new Set(
-                        getFlattenedFiles().map(
-                          ({ file }) => file.resource_id || ""
-                        )
-                      )
-                    );
-                  } else {
-                    setSelectedFiles(new Set());
-                  }
-                }}
-              />
-            </TableHead>
-            <TableHead
-              style={{
-                minWidth: columnDefinitions[1].size,
-                maxWidth: columnDefinitions[1].size,
-                width: columnDefinitions[1].size,
-              }}
-            >
-              Name
-            </TableHead>
-            <TableHead
-              style={{
-                minWidth: columnDefinitions[2].size,
-                maxWidth: columnDefinitions[2].size,
-                width: columnDefinitions[2].size,
-              }}
-            >
-              Size
-            </TableHead>
-            <TableHead
-              style={{
-                minWidth: columnDefinitions[3].size,
-                maxWidth: columnDefinitions[3].size,
-                width: columnDefinitions[3].size,
-              }}
-            >
-              Modified
-            </TableHead>
-            <TableHead
-              style={{
-                minWidth: columnDefinitions[4].size,
-                maxWidth: columnDefinitions[4].size,
-                width: columnDefinitions[4].size,
-              }}
-            >
-              Indexed
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {/* Show skeleton rows when loading */}
-          {isLoading && !error ? (
-            Array.from({ length: 10 }, (_, i) => (
-              <TableRow
-                key={`skeleton-${i}`}
-                className="animate-pulse h-[39px]"
-              >
-                <TableCell
-                  className="pr-0"
-                  style={{
-                    minWidth: columnDefinitions[0].size,
-                    maxWidth: columnDefinitions[0].size,
-                    width: columnDefinitions[0].size,
-                  }}
-                >
-                  <div className="h-4 w-4 bg-gray-200 rounded"></div>
-                </TableCell>
-                <TableCell
-                  className="flex items-center h-[39px]"
-                  style={{
-                    minWidth: columnDefinitions[1].size,
-                    maxWidth: columnDefinitions[1].size,
-                    width: columnDefinitions[1].size,
-                  }}
-                >
-                  <div className="flex items-center space-x-2">
-                    <div className="h-4 w-4 bg-gray-200 rounded"></div>
-                    <div className="h-4 w-24 bg-gray-200 rounded"></div>
-                  </div>
-                </TableCell>
-                <TableCell
-                  style={{
-                    minWidth: columnDefinitions[2].size,
-                    maxWidth: columnDefinitions[2].size,
-                    width: columnDefinitions[2].size,
-                  }}
-                >
-                  <div className="h-4 w-12 bg-gray-200 rounded"></div>
-                </TableCell>
-                <TableCell
-                  style={{
-                    minWidth: columnDefinitions[3].size,
-                    maxWidth: columnDefinitions[3].size,
-                    width: columnDefinitions[3].size,
-                  }}
-                >
-                  <div className="h-4 w-20 bg-gray-200 rounded"></div>
-                </TableCell>
-                <TableCell
-                  style={{
-                    minWidth: columnDefinitions[4].size,
-                    maxWidth: columnDefinitions[4].size,
-                    width: columnDefinitions[4].size,
-                  }}
-                >
-                  <div className="h-4 w-16 bg-gray-200 rounded"></div>
-                </TableCell>
-              </TableRow>
-            ))
-          ) : files.length === 0 && !isLoading ? (
-            <TableRow>
-              <TableCell
-                colSpan={5}
-                className="text-center py-8 text-muted-foreground"
-                style={{
-                  minWidth: columnDefinitions.reduce(
-                    (sum, col) => sum + col.size,
-                    0
-                  ),
-                  width: columnDefinitions.reduce(
-                    (sum, col) => sum + col.size,
-                    0
-                  ),
-                }}
-              >
-                <p>No files found in this connection.</p>
-                <p className="text-sm">
-                  Files from your connected drive will appear here.
-                </p>
-              </TableCell>
-            </TableRow>
-          ) : (
-            getFlattenedFiles().map(({ file, depth, isLoading }, index) => {
-              const fileId = file.resource_id || `${index}`;
-              const isSelected = selectedFiles.has(fileId);
-              const indexingStatus =
-                fileIndexingStatus.get(fileId) || "not_indexed";
-              const isFolder = file.inode_type === "directory";
-
-              // Handle loading skeleton
-              if (isLoading) {
-                return (
-                  <TableRow key={fileId} className="animate-pulse h-[39px]">
-                    <TableCell
-                      className="pr-0"
-                      style={{
-                        minWidth: columnDefinitions[0].size,
-                        maxWidth: columnDefinitions[0].size,
-                        width: columnDefinitions[0].size,
-                      }}
-                    >
-                      <div className="h-4 w-4 bg-gray-200 rounded"></div>
-                    </TableCell>
-                    <TableCell
-                      className="flex items-center h-[39px]"
-                      style={{
-                        minWidth: columnDefinitions[1].size,
-                        maxWidth: columnDefinitions[1].size,
-                        width: columnDefinitions[1].size,
-                      }}
-                    >
-                      <div
-                        style={{ marginLeft: `${depth * 20}px` }}
-                        className="flex items-center space-x-2"
-                      >
-                        <div className="h-4 w-4 bg-gray-200 rounded"></div>
-                        <div className="h-4 w-24 bg-gray-200 rounded"></div>
-                      </div>
-                    </TableCell>
-                    <TableCell
-                      style={{
-                        minWidth: columnDefinitions[2].size,
-                        maxWidth: columnDefinitions[2].size,
-                        width: columnDefinitions[2].size,
-                      }}
-                    >
-                      <div className="h-4 w-12 bg-gray-200 rounded"></div>
-                    </TableCell>
-                    <TableCell
-                      style={{
-                        minWidth: columnDefinitions[3].size,
-                        maxWidth: columnDefinitions[3].size,
-                        width: columnDefinitions[3].size,
-                      }}
-                    >
-                      <div className="h-4 w-20 bg-gray-200 rounded"></div>
-                    </TableCell>
-                    <TableCell
-                      style={{
-                        minWidth: columnDefinitions[4].size,
-                        maxWidth: columnDefinitions[4].size,
-                        width: columnDefinitions[4].size,
-                      }}
-                    >
-                      <div className="h-4 w-16 bg-gray-200 rounded"></div>
-                    </TableCell>
-                  </TableRow>
-                );
-              }
-
-              return (
-                <TableRow key={fileId}>
-                  <TableCell
-                    style={{
-                      minWidth: columnDefinitions[0].size,
-                      maxWidth: columnDefinitions[0].size,
-                      width: columnDefinitions[0].size,
-                    }}
-                  >
-                    <Checkbox
-                      checked={isSelected}
-                      disabled={isOperationInProgress}
-                      onCheckedChange={(checked: boolean) => {
-                        const newSelected = new Set(selectedFiles);
-                        if (checked) {
-                          newSelected.add(fileId);
-
-                          // If it's a folder, also select all visible children
-                          if (
-                            isFolder &&
-                            file.resource_id &&
-                            expandedFolders.has(file.resource_id)
-                          ) {
-                            const children = folderContents.get(
-                              file.resource_id
-                            );
-                            if (children) {
-                              const allChildIds = getAllFileIds(
-                                children,
-                                folderContents,
-                                expandedFolders
-                              );
-                              allChildIds.forEach((id) => newSelected.add(id));
-                            }
-                          }
-                        } else {
-                          newSelected.delete(fileId);
-
-                          // If it's a folder, also deselect all visible children
-                          if (
-                            isFolder &&
-                            file.resource_id &&
-                            expandedFolders.has(file.resource_id)
-                          ) {
-                            const children = folderContents.get(
-                              file.resource_id
-                            );
-                            if (children) {
-                              const allChildIds = getAllFileIds(
-                                children,
-                                folderContents,
-                                expandedFolders
-                              );
-                              allChildIds.forEach((id) =>
-                                newSelected.delete(id)
-                              );
-                            }
-                          }
-                        }
-                        setSelectedFiles(newSelected);
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell
-                    className="flex items-center space-x-2"
-                    style={{
-                      minWidth: columnDefinitions[1].size,
-                      maxWidth: columnDefinitions[1].size,
-                      width: columnDefinitions[1].size,
-                    }}
-                  >
-                    <div
-                      style={{ marginLeft: `${depth * 20}px` }}
-                      className="flex items-center space-x-2"
-                    >
-                      <FileIconComponent file={file} />
-                      {isFolder ? (
-                        <button
-                          className="font-medium cursor-pointer hover:text-blue-600"
-                          onClick={() =>
-                            handleFolderClick(file as StackDirectory)
-                          }
-                        >
-                          {file.inode_path?.path?.split("/").pop() || "Unnamed"}
-                        </button>
-                      ) : (
-                        <span className="font-medium">
-                          {file.inode_path?.path?.split("/").pop() || "Unnamed"}
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell
-                    style={{
-                      minWidth: columnDefinitions[2].size,
-                      maxWidth: columnDefinitions[2].size,
-                      width: columnDefinitions[2].size,
-                    }}
-                  >
-                    {file.inode_type === "directory"
-                      ? "-"
-                      : formatFileSize((file as StackFile).size || 0)}
-                  </TableCell>
-                  <TableCell
-                    style={{
-                      minWidth: columnDefinitions[3].size,
-                      maxWidth: columnDefinitions[3].size,
-                      width: columnDefinitions[3].size,
-                    }}
-                  >
-                    {file.modified_at ? formatDate(file.modified_at) : "-"}
-                  </TableCell>
-                  <TableCell
-                    style={{
-                      minWidth: columnDefinitions[4].size,
-                      maxWidth: columnDefinitions[4].size,
-                      width: columnDefinitions[4].size,
-                    }}
-                  >
-                    {renderIndexingStatus(
-                      indexingStatus,
-                      file.indexed_at ?? undefined
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })
-          )}
-        </TableBody>
-      </Table>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -1004,7 +639,313 @@ export default function FileExplorer() {
             </div>
           </CardHeader>
 
-          <CardContent>{renderFilesContent()}</CardContent>
+          <CardContent>
+            {error ? (
+              <div className="text-center py-8 text-destructive">
+                <p>Failed to load files.</p>
+                <p className="text-sm text-muted-foreground">
+                  Please try again later.
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead
+                      style={{
+                        minWidth: columnDefinitions[0].size,
+                        maxWidth: columnDefinitions[0].size,
+                        width: columnDefinitions[0].size,
+                      }}
+                    >
+                      <Checkbox
+                        checked={
+                          files.length > 0 &&
+                          selectedFiles.size === files.length
+                        }
+                        disabled={isOperationInProgress}
+                        onCheckedChange={(checked: boolean) => {
+                          if (checked) {
+                            const allFileIds = getAllFileIds(
+                              files,
+                              folderContents,
+                              expandedFolders
+                            );
+                            setSelectedFiles(new Set(allFileIds));
+                          } else {
+                            setSelectedFiles(new Set());
+                          }
+                        }}
+                      />
+                    </TableHead>
+                    <TableHead
+                      style={{
+                        minWidth: columnDefinitions[1].size,
+                        maxWidth: columnDefinitions[1].size,
+                        width: columnDefinitions[1].size,
+                      }}
+                    >
+                      Name
+                    </TableHead>
+                    <TableHead
+                      style={{
+                        minWidth: columnDefinitions[2].size,
+                        maxWidth: columnDefinitions[2].size,
+                        width: columnDefinitions[2].size,
+                      }}
+                    >
+                      Size
+                    </TableHead>
+                    <TableHead
+                      style={{
+                        minWidth: columnDefinitions[3].size,
+                        maxWidth: columnDefinitions[3].size,
+                        width: columnDefinitions[3].size,
+                      }}
+                    >
+                      Modified
+                    </TableHead>
+                    <TableHead
+                      style={{
+                        minWidth: columnDefinitions[4].size,
+                        maxWidth: columnDefinitions[4].size,
+                        width: columnDefinitions[4].size,
+                      }}
+                    >
+                      Indexed
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading && (
+                    <>
+                      {Array.from({ length: 10 }, (_, index) => (
+                        <TableRow
+                          key={`skeleton-${index}`}
+                          className="animate-pulse h-[39px]"
+                        >
+                          <TableCell
+                            className="pr-0"
+                            style={{
+                              minWidth: columnDefinitions[0].size,
+                              maxWidth: columnDefinitions[0].size,
+                              width: columnDefinitions[0].size,
+                            }}
+                          >
+                            <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                          </TableCell>
+                          <TableCell
+                            className="flex items-center h-[39px]"
+                            style={{
+                              minWidth: columnDefinitions[1].size,
+                              maxWidth: columnDefinitions[1].size,
+                              width: columnDefinitions[1].size,
+                            }}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                              <div className="h-4 w-32 bg-gray-200 rounded"></div>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            style={{
+                              minWidth: columnDefinitions[2].size,
+                              maxWidth: columnDefinitions[2].size,
+                              width: columnDefinitions[2].size,
+                            }}
+                          >
+                            <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                          </TableCell>
+                          <TableCell
+                            style={{
+                              minWidth: columnDefinitions[3].size,
+                              maxWidth: columnDefinitions[3].size,
+                              width: columnDefinitions[3].size,
+                            }}
+                          >
+                            <div className="h-4 w-20 bg-gray-200 rounded"></div>
+                          </TableCell>
+                          <TableCell
+                            style={{
+                              minWidth: columnDefinitions[4].size,
+                              maxWidth: columnDefinitions[4].size,
+                              width: columnDefinitions[4].size,
+                            }}
+                          >
+                            <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </>
+                  )}
+                  {!isLoading && files.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="text-center py-8 text-muted-foreground"
+                        style={{
+                          minWidth: columnDefinitions.reduce(
+                            (sum, col) => sum + col.size,
+                            0
+                          ),
+                          width: columnDefinitions.reduce(
+                            (sum, col) => sum + col.size,
+                            0
+                          ),
+                        }}
+                      >
+                        No files found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!isLoading &&
+                    getFlattenedFiles().map((fileData) => {
+                      const { file, depth } = fileData;
+                      const isSelected = selectedFiles.has(
+                        file.resource_id || ""
+                      );
+                      const isFolder = file.inode_type === "directory";
+                      const indexingStatus =
+                        fileIndexingStatus.get(file.resource_id || "") ||
+                        "not_indexed";
+
+                      return (
+                        <TableRow key={file.resource_id}>
+                          <TableCell
+                            style={{
+                              minWidth: columnDefinitions[0].size,
+                              maxWidth: columnDefinitions[0].size,
+                              width: columnDefinitions[0].size,
+                            }}
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              disabled={isOperationInProgress}
+                              onCheckedChange={(checked: boolean) => {
+                                const newSelected = new Set(selectedFiles);
+                                if (checked) {
+                                  newSelected.add(file.resource_id);
+
+                                  // If it's a folder, also select all visible children
+                                  if (
+                                    isFolder &&
+                                    file.resource_id &&
+                                    expandedFolders.has(file.resource_id)
+                                  ) {
+                                    const children = folderContents.get(
+                                      file.resource_id
+                                    );
+                                    if (children) {
+                                      const allChildIds = getAllFileIds(
+                                        children,
+                                        folderContents,
+                                        expandedFolders
+                                      );
+                                      allChildIds.forEach((id) =>
+                                        newSelected.add(id)
+                                      );
+                                    }
+                                  }
+                                } else {
+                                  newSelected.delete(file.resource_id);
+
+                                  // If it's a folder, also deselect all visible children
+                                  if (
+                                    isFolder &&
+                                    file.resource_id &&
+                                    expandedFolders.has(file.resource_id)
+                                  ) {
+                                    const children = folderContents.get(
+                                      file.resource_id
+                                    );
+                                    if (children) {
+                                      const allChildIds = getAllFileIds(
+                                        children,
+                                        folderContents,
+                                        expandedFolders
+                                      );
+                                      allChildIds.forEach((id) =>
+                                        newSelected.delete(id)
+                                      );
+                                    }
+                                  }
+                                }
+                                setSelectedFiles(newSelected);
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell
+                            className="flex items-center space-x-2"
+                            style={{
+                              minWidth: columnDefinitions[1].size,
+                              maxWidth: columnDefinitions[1].size,
+                              width: columnDefinitions[1].size,
+                            }}
+                          >
+                            <div
+                              style={{ marginLeft: `${depth * 20}px` }}
+                              className="flex items-center space-x-2"
+                            >
+                              <FileIconComponent file={file} />
+                              {isFolder ? (
+                                <button
+                                  className="font-medium cursor-pointer hover:text-blue-600"
+                                  onClick={() =>
+                                    handleFolderClick(file as StackDirectory)
+                                  }
+                                >
+                                  {file.inode_path?.path?.split("/").pop() ||
+                                    "Unnamed"}
+                                </button>
+                              ) : (
+                                <span className="font-medium">
+                                  {file.inode_path?.path?.split("/").pop() ||
+                                    "Unnamed"}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            style={{
+                              minWidth: columnDefinitions[2].size,
+                              maxWidth: columnDefinitions[2].size,
+                              width: columnDefinitions[2].size,
+                            }}
+                          >
+                            {file.inode_type === "directory"
+                              ? "-"
+                              : formatFileSize((file as StackFile).size || 0)}
+                          </TableCell>
+                          <TableCell
+                            style={{
+                              minWidth: columnDefinitions[3].size,
+                              maxWidth: columnDefinitions[3].size,
+                              width: columnDefinitions[3].size,
+                            }}
+                          >
+                            {file.modified_at
+                              ? formatDate(file.modified_at)
+                              : "-"}
+                          </TableCell>
+                          <TableCell
+                            style={{
+                              minWidth: columnDefinitions[4].size,
+                              maxWidth: columnDefinitions[4].size,
+                              width: columnDefinitions[4].size,
+                            }}
+                          >
+                            <IndexingStatusBadge
+                              status={indexingStatus}
+                              indexedAt={file.indexed_at ?? undefined}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
         </Card>
 
         {/* Show message when no results after filtering */}
