@@ -47,7 +47,7 @@ interface FileExplorerProps {
   initialData: ServerData;
 }
 
-type IndexingStatus = "indexed" | "not_indexed" | "indexing";
+type IndexingStatus = "indexed" | "not_indexed" | "indexing" | "unindexing";
 
 function LogoutButton() {
   const handleLogout = () => {
@@ -357,6 +357,12 @@ function renderIndexingStatus(
           indexing...
         </Badge>
       );
+    case "unindexing":
+      return (
+        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+          unindexing...
+        </Badge>
+      );
     case "not_indexed":
     default:
       return (
@@ -395,6 +401,10 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [totalFiles, setTotalFiles] = useState<number>(0);
   const pageSize = 100;
+
+  // Operation state
+  const [isOperationInProgress, setIsOperationInProgress] =
+    useState<boolean>(false);
 
   const queryClient = useQueryClient();
 
@@ -469,6 +479,9 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
   const handleIndexFiles = async () => {
     const selectedFileIds = Array.from(selectedFiles);
 
+    // Set operation in progress
+    setIsOperationInProgress(true);
+
     // Set selected files to indexing state
     const newStatus = new Map(fileIndexingStatus);
     selectedFileIds.forEach((fileId) => {
@@ -510,11 +523,24 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
       setFileIndexingStatus(resetStatus);
       console.error("Failed to index files:", error);
       // You could show a toast notification here
+    } finally {
+      // Clear operation in progress
+      setIsOperationInProgress(false);
     }
   };
 
   const handleUnindexFiles = async () => {
     const selectedFileIds = Array.from(selectedFiles);
+
+    // Set operation in progress
+    setIsOperationInProgress(true);
+
+    // Set selected files to unindexing state
+    const unindexingStatus = new Map(fileIndexingStatus);
+    selectedFileIds.forEach((fileId) => {
+      unindexingStatus.set(fileId, "unindexing");
+    });
+    setFileIndexingStatus(unindexingStatus);
 
     try {
       console.log("Fetching all folder contents for unindexing...");
@@ -542,8 +568,17 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
       setFileIndexingStatus(newStatus);
       setSelectedFiles(new Set());
     } catch (error) {
+      // Reset status on error for selected files
+      const resetStatus = new Map(fileIndexingStatus);
+      selectedFileIds.forEach((fileId) => {
+        resetStatus.set(fileId, "indexed"); // Reset to indexed on error
+      });
+      setFileIndexingStatus(resetStatus);
       console.error("Failed to unindex files:", error);
       // You could show a toast notification here
+    } finally {
+      // Clear operation in progress
+      setIsOperationInProgress(false);
     }
   };
 
@@ -676,6 +711,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                   selectedFiles.size === getFlattenedFiles().length &&
                   getFlattenedFiles().length > 0
                 }
+                disabled={isOperationInProgress}
                 onCheckedChange={(checked: boolean) => {
                   if (checked) {
                     setSelectedFiles(
@@ -779,6 +815,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                   <TableCell className="w-6">
                     <Checkbox
                       checked={isSelected}
+                      disabled={isOperationInProgress}
                       onCheckedChange={(checked: boolean) => {
                         const newSelected = new Set(selectedFiles);
                         if (checked) {
@@ -963,9 +1000,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                     variant="default"
                     size="sm"
                     onClick={handleIndexFiles}
-                    disabled={Array.from(selectedFiles).some(
-                      (fileId) => fileIndexingStatus.get(fileId) === "indexing"
-                    )}
+                    disabled={isOperationInProgress}
                   >
                     <Check className="h-4 w-4 mr-1" />
                     Index Files
@@ -974,6 +1009,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                     variant="outline"
                     size="sm"
                     onClick={handleUnindexFiles}
+                    disabled={isOperationInProgress}
                   >
                     <X className="h-4 w-4 mr-1" />
                     Unindex Files

@@ -2,7 +2,7 @@ import {
   createServerAuthenticatedClient,
   getTokenFromCookies,
 } from "@/lib/auth";
-import { ApiError } from "@/stack-api-autogen";
+import { ApiError, IndexingParams_Input } from "@/stack-api-autogen";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -39,23 +39,22 @@ export async function POST(request: NextRequest) {
     fileIds.forEach((id: string) => currentSourceIds.delete(id));
 
     // Update the knowledge base with removed source IDs
-    const updatedKbData =
-      await client.knowledgeBases.updateKnowledgeBaseKnowledgeBasesKnowledgeBaseIdPut(
-        knowledgeBaseId,
-        {
-          connection_id: kbData.connection_id,
-          connection_source_ids: Array.from(currentSourceIds),
-          website_sources: kbData.website_sources || [],
-          name: kbData.name,
-          description: kbData.description,
-          indexing_params: kbData.indexing_params,
-          org_level_role: kbData.org_level_role,
-          cron_job_id: kbData.cron_job_id,
-        }
-      );
+    await client.knowledgeBases.updateKnowledgeBaseKnowledgeBasesKnowledgeBaseIdPut(
+      knowledgeBaseId,
+      {
+        connection_id: kbData.connection_id,
+        connection_source_ids: Array.from(currentSourceIds),
+        website_sources: kbData.website_sources || [],
+        name: kbData.name,
+        description: kbData.description,
+        indexing_params: kbData.indexing_params as IndexingParams_Input,
+        org_level_role: kbData.org_level_role,
+        cron_job_id: kbData.cron_job_id,
+      }
+    );
 
     // Trigger sync to update the index
-    await client.knowledgeBases.synchronizeKnowledgeBaseKnowledgeBasesSyncTriggerKnowledgeBaseIdOrgIdGet(
+    client.knowledgeBases.synchronizeKnowledgeBaseKnowledgeBasesSyncTriggerKnowledgeBaseIdOrgIdGet(
       kbData.org_id,
       knowledgeBaseId
     );
