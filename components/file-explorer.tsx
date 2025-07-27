@@ -1103,7 +1103,7 @@ export default function FileExplorer() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4 mr-4">
                   <span className="text-sm font-medium text-gray-900">
-                    {selectedFiles.size} file
+                    {selectedFiles.size} resource
                     {selectedFiles.size !== 1 ? "s" : ""} selected
                   </span>
                 </div>
