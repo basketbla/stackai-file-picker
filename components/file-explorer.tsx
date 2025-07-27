@@ -359,7 +359,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-12">
+            <TableHead className="w-6">
               <Checkbox
                 checked={
                   selectedFiles.size === getFlattenedFiles().length &&
@@ -380,10 +380,10 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                 }}
               />
             </TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Size</TableHead>
-            <TableHead>Modified</TableHead>
-            <TableHead>Indexed</TableHead>
+            <TableHead className="w-1/2">Name</TableHead>
+            <TableHead className="w-24">Size</TableHead>
+            <TableHead className="w-32">Modified</TableHead>
+            <TableHead className="w-24">Indexed</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -401,10 +401,10 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
             if (isLoading) {
               return (
                 <TableRow key={fileId} className="animate-pulse">
-                  <TableCell>
+                  <TableCell className="w-6 pr-0">
                     <div className="h-4 w-4 bg-gray-200 rounded"></div>
                   </TableCell>
-                  <TableCell className="flex items-center space-x-2">
+                  <TableCell className="w-1/2 flex items-center space-x-2">
                     <div
                       style={{ marginLeft: `${depth * 20}px` }}
                       className="flex items-center space-x-2"
@@ -413,13 +413,13 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                       <div className="h-4 w-24 bg-gray-200 rounded"></div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="w-24">
                     <div className="h-4 w-12 bg-gray-200 rounded"></div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="w-32">
                     <div className="h-4 w-20 bg-gray-200 rounded"></div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="w-24">
                     <div className="h-4 w-16 bg-gray-200 rounded"></div>
                   </TableCell>
                 </TableRow>
@@ -428,7 +428,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
 
             return (
               <TableRow key={fileId}>
-                <TableCell>
+                <TableCell className="w-6">
                   <Checkbox
                     checked={isSelected}
                     onCheckedChange={(checked: boolean) => {
@@ -442,7 +442,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                     }}
                   />
                 </TableCell>
-                <TableCell className="flex items-center space-x-2">
+                <TableCell className="w-1/2 flex items-center space-x-2">
                   <div
                     style={{ marginLeft: `${depth * 20}px` }}
                     className="flex items-center space-x-2"
@@ -464,15 +464,15 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                     )}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="w-24">
                   {file.inode_type === "directory"
                     ? "-"
                     : formatFileSize((file as StackFile).size || 0)}
                 </TableCell>
-                <TableCell>
+                <TableCell className="w-32">
                   {file.modified_at ? formatDate(file.modified_at) : "-"}
                 </TableCell>
-                <TableCell>
+                <TableCell className="w-24">
                   {renderIndexingStatus(indexingStatus, file.modified_at)}
                 </TableCell>
               </TableRow>
