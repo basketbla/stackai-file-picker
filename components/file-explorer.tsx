@@ -285,14 +285,21 @@ export default function FileExplorer() {
   useEffect(() => {
     const loadIndexingStatus = async () => {
       try {
-        const indexedFileIds = await fetchIndexingStatus(
+        const indexedFilePaths = await fetchIndexingStatus(
           USER_SETTINGS.knowledge_base_id
         );
         const statusMap = new Map<string, IndexingStatus>();
 
-        // Set all known indexed files
-        indexedFileIds.forEach((fileId) => {
-          statusMap.set(fileId, "indexed");
+        // Check each file in the current view against indexed paths
+        files.forEach((file) => {
+          if (file.resource_id) {
+            const filePath = file.inode_path?.path;
+            if (filePath && indexedFilePaths.includes(filePath)) {
+              statusMap.set(file.resource_id, "indexed");
+            } else {
+              statusMap.set(file.resource_id, "not_indexed");
+            }
+          }
         });
 
         setFileIndexingStatus(statusMap);
@@ -301,8 +308,10 @@ export default function FileExplorer() {
       }
     };
 
-    loadIndexingStatus();
-  }, []);
+    if (files.length > 0) {
+      loadIndexingStatus();
+    }
+  }, [files]); // Re-run when files change
 
   // Reset pagination when search/filter changes
   useEffect(() => {
@@ -459,13 +468,39 @@ export default function FileExplorer() {
               return newLoading;
             });
 
-            // Fetch contents
-            fetchFolderContents(selectedConnectionId, folderId)
-              .then((contents) => {
+            // Fetch contents and indexing status
+            Promise.all([
+              fetchFolderContents(selectedConnectionId, folderId),
+              fetchIndexingStatus(
+                USER_SETTINGS.knowledge_base_id,
+                folder.inode_path?.path || "/"
+              ),
+            ])
+              .then(([contents, indexedFilePaths]) => {
+                // Update folder contents
                 setFolderContents((prevContents) => {
                   const newContents = new Map(prevContents);
                   newContents.set(folderId, contents);
                   return newContents;
+                });
+
+                // Update indexing status for the newly loaded files
+                setFileIndexingStatus((prevStatus) => {
+                  const newStatus = new Map(prevStatus);
+
+                  // Check each file in contents against indexed paths
+                  contents.forEach((file) => {
+                    if (file.resource_id) {
+                      const filePath = file.inode_path?.path;
+                      if (filePath && indexedFilePaths.includes(filePath)) {
+                        newStatus.set(file.resource_id, "indexed");
+                      } else {
+                        newStatus.set(file.resource_id, "not_indexed");
+                      }
+                    }
+                  });
+
+                  return newStatus;
                 });
               })
               .catch((error) => {
@@ -537,6 +572,7 @@ export default function FileExplorer() {
     };
 
     addFiles(files);
+
     return flattened;
   };
 

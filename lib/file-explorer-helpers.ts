@@ -241,11 +241,14 @@ export async function unindexFiles(fileIds: string[]): Promise<void> {
 }
 
 export async function fetchIndexingStatus(
-  knowledgeBaseId: string
+  knowledgeBaseId: string,
+  resourcePath: string = "/"
 ): Promise<string[]> {
-  const response = await fetch(
-    `/api/knowledge-base/status?knowledge_base_id=${knowledgeBaseId}`
-  );
+  const url = new URL(`/api/knowledge-base/status`, window.location.origin);
+  url.searchParams.append("knowledge_base_id", knowledgeBaseId);
+  url.searchParams.append("resource_path", resourcePath);
+
+  const response = await fetch(url.toString());
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -256,7 +259,7 @@ export async function fetchIndexingStatus(
   }
 
   const data = await response.json();
-  return data.indexedFileIds || [];
+  return data.indexedFilePaths || [];
 }
 
 export function formatFileSize(bytes: number): string {

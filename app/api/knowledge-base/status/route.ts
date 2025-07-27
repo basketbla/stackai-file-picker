@@ -2,6 +2,7 @@ import {
   createServerAuthenticatedClient,
   getTokenFromCookies,
 } from "@/lib/auth";
+import type { StackDirectory, StackFile } from "@/stack-api-autogen";
 import { ApiError } from "@/stack-api-autogen";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
     // Get query parameters
     const { searchParams } = new URL(request.url);
     const knowledgeBaseId = searchParams.get("knowledge_base_id");
+    const resourcePath = searchParams.get("resource_path") || "/";
 
     if (!knowledgeBaseId) {
       return NextResponse.json(
@@ -29,15 +31,20 @@ export async function GET(request: NextRequest) {
     // Create authenticated client
     const client = await createServerAuthenticatedClient(token);
 
-    // Get current knowledge base data
+    // Get child resources from the knowledge base for the specified path
     const kbData =
-      await client.knowledgeBases.getKnowledgeBaseByIdKnowledgeBasesKnowledgeBaseIdGet(
-        knowledgeBaseId
+      await client.knowledgeBases.getChildrenResourcesKnowledgeBasesKnowledgeBaseIdResourcesChildrenGet(
+        knowledgeBaseId,
+        resourcePath
       );
 
-    // Return the connection_source_ids which represent indexed files
+    // Extract inode_path.path from the child resources to represent indexed files
+    const indexedFilePaths = (kbData.data || [])
+      .map((item: StackFile | StackDirectory) => item.inode_path?.path)
+      .filter((path: string | undefined) => path !== undefined);
+
     return NextResponse.json({
-      indexedFileIds: kbData.connection_source_ids || [],
+      indexedFilePaths,
     });
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
