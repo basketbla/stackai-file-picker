@@ -800,7 +800,11 @@ export default function FileExplorer() {
                   )}
                   {!isLoading &&
                     getFlattenedFiles().map((fileData) => {
-                      const { file, depth } = fileData;
+                      const {
+                        file,
+                        depth,
+                        isLoading: fileIsLoading,
+                      } = fileData;
                       const isSelected = selectedFiles.has(
                         file.resource_id || ""
                       );
@@ -808,6 +812,70 @@ export default function FileExplorer() {
                       const indexingStatus =
                         fileIndexingStatus.get(file.resource_id || "") ||
                         "not_indexed";
+
+                      // Render skeleton for loading files
+                      if (fileIsLoading) {
+                        return (
+                          <TableRow
+                            key={file.resource_id}
+                            className="animate-pulse h-[39px]"
+                          >
+                            <TableCell
+                              className="pr-0"
+                              style={{
+                                minWidth: columnDefinitions[0].size,
+                                maxWidth: columnDefinitions[0].size,
+                                width: columnDefinitions[0].size,
+                              }}
+                            >
+                              <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                            </TableCell>
+                            <TableCell
+                              className="flex items-center h-[39px]"
+                              style={{
+                                minWidth: columnDefinitions[1].size,
+                                maxWidth: columnDefinitions[1].size,
+                                width: columnDefinitions[1].size,
+                              }}
+                            >
+                              <div
+                                style={{ marginLeft: `${depth * 20}px` }}
+                                className="flex items-center space-x-2"
+                              >
+                                <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                                <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                              </div>
+                            </TableCell>
+                            <TableCell
+                              style={{
+                                minWidth: columnDefinitions[2].size,
+                                maxWidth: columnDefinitions[2].size,
+                                width: columnDefinitions[2].size,
+                              }}
+                            >
+                              <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                            </TableCell>
+                            <TableCell
+                              style={{
+                                minWidth: columnDefinitions[3].size,
+                                maxWidth: columnDefinitions[3].size,
+                                width: columnDefinitions[3].size,
+                              }}
+                            >
+                              <div className="h-4 w-20 bg-gray-200 rounded"></div>
+                            </TableCell>
+                            <TableCell
+                              style={{
+                                minWidth: columnDefinitions[4].size,
+                                maxWidth: columnDefinitions[4].size,
+                                width: columnDefinitions[4].size,
+                              }}
+                            >
+                              <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
 
                       return (
                         <TableRow key={file.resource_id}>
