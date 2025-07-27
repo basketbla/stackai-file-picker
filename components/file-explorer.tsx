@@ -1,6 +1,7 @@
 "use client";
 
 import { logoutAndRedirect } from "@/lib/auth";
+import { USER_SETTINGS } from "@/lib/constants";
 import { ConnectionCard, StackDirectory, StackFile } from "@/stack-api-autogen";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -14,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
@@ -127,6 +128,97 @@ async function fetchFolderContents(
   return result;
 }
 
+// Get all file/folder IDs recursively for a folder
+function getAllFileIds(
+  files: (StackFile | StackDirectory)[],
+  folderContents: Map<string, (StackFile | StackDirectory)[]>,
+  expandedFolders: Set<string>
+): string[] {
+  const ids: string[] = [];
+
+  const collectIds = (fileList: (StackFile | StackDirectory)[]) => {
+    fileList.forEach((file) => {
+      if (file.resource_id) {
+        ids.push(file.resource_id);
+
+        // If it's an expanded folder, also collect its children
+        if (
+          file.inode_type === "directory" &&
+          expandedFolders.has(file.resource_id)
+        ) {
+          const children = folderContents.get(file.resource_id);
+          if (children) {
+            collectIds(children);
+          }
+        }
+      }
+    });
+  };
+
+  collectIds(files);
+  return ids;
+}
+
+// API functions for indexing operations
+async function indexFiles(fileIds: string[]): Promise<void> {
+  const response = await fetch("/api/knowledge-base/index", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      fileIds,
+      knowledgeBaseId: USER_SETTINGS.knowledge_base_id,
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      await logoutAndRedirect();
+      throw new Error("Unauthorized");
+    }
+    throw new Error("Failed to index files");
+  }
+}
+
+async function unindexFiles(fileIds: string[]): Promise<void> {
+  const response = await fetch("/api/knowledge-base/unindex", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      fileIds,
+      knowledgeBaseId: USER_SETTINGS.knowledge_base_id,
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      await logoutAndRedirect();
+      throw new Error("Unauthorized");
+    }
+    throw new Error("Failed to unindex files");
+  }
+}
+
+async function fetchIndexingStatus(knowledgeBaseId: string): Promise<string[]> {
+  const response = await fetch(
+    `/api/knowledge-base/status?knowledge_base_id=${knowledgeBaseId}`
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      await logoutAndRedirect();
+      throw new Error("Unauthorized");
+    }
+    throw new Error("Failed to fetch indexing status");
+  }
+
+  const data = await response.json();
+  return data.indexedFileIds || [];
+}
+
 function FileIconComponent({ file }: { file: StackFile | StackDirectory }) {
   if (file.inode_type === "directory") {
     return <Folder className="h-4 w-4 text-blue-500" />;
@@ -157,13 +249,13 @@ function formatFileSize(bytes: number): string {
 
 function renderIndexingStatus(
   status: IndexingStatus,
-  modifiedAt?: string
+  indexedAt?: string
 ): React.JSX.Element {
   switch (status) {
     case "indexed":
       return (
         <Badge variant="default" className="bg-green-100 text-green-800">
-          {modifiedAt ? `${formatDate(modifiedAt)}` : "indexed"}
+          {indexedAt ? `${formatDate(indexedAt)}` : "indexed"}
         </Badge>
       );
     case "indexing":
@@ -226,12 +318,35 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
   const files = paginatedData?.data || [];
 
   // Update pagination state when data changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (paginatedData) {
       setTotalFiles(paginatedData.total);
       setHasMore(paginatedData.hasMore);
     }
   }, [paginatedData]);
+
+  // Load initial indexing status
+  useEffect(() => {
+    const loadIndexingStatus = async () => {
+      try {
+        const indexedFileIds = await fetchIndexingStatus(
+          USER_SETTINGS.knowledge_base_id
+        );
+        const statusMap = new Map<string, IndexingStatus>();
+
+        // Set all known indexed files
+        indexedFileIds.forEach((fileId) => {
+          statusMap.set(fileId, "indexed");
+        });
+
+        setFileIndexingStatus(statusMap);
+      } catch (error) {
+        console.error("Failed to load indexing status:", error);
+      }
+    };
+
+    loadIndexingStatus();
+  }, []);
 
   // Pagination navigation functions
   const handleNextPage = () => {
@@ -268,27 +383,47 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
     });
     setFileIndexingStatus(newStatus);
 
-    // TODO: Implement actual API call to index files
-    // For now, simulate the indexing process
-    setTimeout(() => {
+    try {
+      // Make actual API call to index files
+      await indexFiles(filesToIndex);
+
+      // Update status to indexed on success
       const updatedStatus = new Map(fileIndexingStatus);
       filesToIndex.forEach((fileId) => {
         updatedStatus.set(fileId, "indexed");
       });
       setFileIndexingStatus(updatedStatus);
       setSelectedFiles(new Set());
-    }, 2000);
+    } catch (error) {
+      // Reset status on error
+      const resetStatus = new Map(fileIndexingStatus);
+      filesToIndex.forEach((fileId) => {
+        resetStatus.set(fileId, "not_indexed");
+      });
+      setFileIndexingStatus(resetStatus);
+      console.error("Failed to index files:", error);
+      // You could show a toast notification here
+    }
   };
 
   const handleUnindexFiles = async () => {
     const filesToUnindex = Array.from(selectedFiles);
 
-    const newStatus = new Map(fileIndexingStatus);
-    filesToUnindex.forEach((fileId) => {
-      newStatus.set(fileId, "not_indexed");
-    });
-    setFileIndexingStatus(newStatus);
-    setSelectedFiles(new Set());
+    try {
+      // Make actual API call to unindex files
+      await unindexFiles(filesToUnindex);
+
+      // Update status to not_indexed on success
+      const newStatus = new Map(fileIndexingStatus);
+      filesToUnindex.forEach((fileId) => {
+        newStatus.set(fileId, "not_indexed");
+      });
+      setFileIndexingStatus(newStatus);
+      setSelectedFiles(new Set());
+    } catch (error) {
+      console.error("Failed to unindex files:", error);
+      // You could show a toast notification here
+    }
   };
 
   const handleFolderClick = (folder: StackDirectory) => {
@@ -486,10 +621,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
               const fileId = file.resource_id || `${index}`;
               const isSelected = selectedFiles.has(fileId);
               const indexingStatus =
-                fileIndexingStatus.get(fileId) ||
-                ((file as StackFile).status === "indexed"
-                  ? "indexed"
-                  : "not_indexed");
+                fileIndexingStatus.get(fileId) || "not_indexed";
               const isFolder = file.inode_type === "directory";
 
               // Handle loading skeleton
@@ -530,8 +662,48 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                         const newSelected = new Set(selectedFiles);
                         if (checked) {
                           newSelected.add(fileId);
+
+                          // If it's a folder, also select all visible children
+                          if (
+                            isFolder &&
+                            file.resource_id &&
+                            expandedFolders.has(file.resource_id)
+                          ) {
+                            const children = folderContents.get(
+                              file.resource_id
+                            );
+                            if (children) {
+                              const allChildIds = getAllFileIds(
+                                children,
+                                folderContents,
+                                expandedFolders
+                              );
+                              allChildIds.forEach((id) => newSelected.add(id));
+                            }
+                          }
                         } else {
                           newSelected.delete(fileId);
+
+                          // If it's a folder, also deselect all visible children
+                          if (
+                            isFolder &&
+                            file.resource_id &&
+                            expandedFolders.has(file.resource_id)
+                          ) {
+                            const children = folderContents.get(
+                              file.resource_id
+                            );
+                            if (children) {
+                              const allChildIds = getAllFileIds(
+                                children,
+                                folderContents,
+                                expandedFolders
+                              );
+                              allChildIds.forEach((id) =>
+                                newSelected.delete(id)
+                              );
+                            }
+                          }
                         }
                         setSelectedFiles(newSelected);
                       }}
@@ -568,7 +740,10 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                     {file.modified_at ? formatDate(file.modified_at) : "-"}
                   </TableCell>
                   <TableCell className="w-24">
-                    {renderIndexingStatus(indexingStatus, file.modified_at)}
+                    {renderIndexingStatus(
+                      indexingStatus,
+                      file.indexed_at ?? undefined
+                    )}
                   </TableCell>
                 </TableRow>
               );
