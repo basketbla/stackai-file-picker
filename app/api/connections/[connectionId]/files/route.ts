@@ -18,9 +18,11 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get resource_id from query parameters
+    // Get query parameters
     const { searchParams } = new URL(request.url);
     const resourceId = searchParams.get("resource_id");
+    const cursor = searchParams.get("cursor");
+    const pageSize = parseInt(searchParams.get("page_size") || "100", 10);
 
     // Create authenticated client
     const client = await createServerAuthenticatedClient(token);
@@ -32,11 +34,20 @@ export async function GET(
           await params
         ).connectionId,
         resourceId || undefined, // use resource_id if provided, undefined for root files
-        undefined, // no cursor
-        100 // page size
+        cursor || undefined, // use cursor for pagination
+        pageSize // configurable page size
       );
 
-    return NextResponse.json(filesResponse.data || []);
+    // Return pagination-aware response
+    const data = filesResponse.data || [];
+    const hasMore = data.length === pageSize; // Simple heuristic - if we got a full page, there might be more
+
+    return NextResponse.json({
+      data,
+      total: data.length, // In a real implementation, this would come from the API
+      hasMore,
+      cursor: hasMore ? `next-${cursor || "start"}` : null, // Generate next cursor
+    });
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

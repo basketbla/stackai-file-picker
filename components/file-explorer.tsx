@@ -3,7 +3,16 @@
 import { logoutAndRedirect } from "@/lib/auth";
 import { ConnectionCard, StackDirectory, StackFile } from "@/stack-api-autogen";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, File, FileText, Folder, Settings, X } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  File,
+  FileText,
+  Folder,
+  Settings,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import React, { useState } from "react";
 import { Badge } from "./ui/badge";
@@ -52,10 +61,27 @@ function LogoutButton() {
   );
 }
 
+interface PaginatedFilesResponse {
+  data: (StackFile | StackDirectory)[];
+  total: number;
+  hasMore: boolean;
+}
+
 async function fetchConnectionFiles(
-  connectionId: string
-): Promise<(StackFile | StackDirectory)[]> {
-  const response = await fetch(`/api/connections/${connectionId}/files`);
+  connectionId: string,
+  cursor?: string,
+  pageSize: number = 100
+): Promise<PaginatedFilesResponse> {
+  const url = new URL(
+    `/api/connections/${connectionId}/files`,
+    window.location.origin
+  );
+  if (cursor) {
+    url.searchParams.append("cursor", cursor);
+  }
+  url.searchParams.append("page_size", pageSize.toString());
+
+  const response = await fetch(url.toString());
   if (!response.ok) {
     if (response.status === 401) {
       await logoutAndRedirect();
@@ -63,7 +89,18 @@ async function fetchConnectionFiles(
     }
     throw new Error("Failed to fetch files");
   }
-  return response.json();
+  const data = await response.json();
+
+  // If the API doesn't return pagination info, simulate it
+  if (Array.isArray(data)) {
+    return {
+      data,
+      total: data.length,
+      hasMore: data.length === pageSize,
+    };
+  }
+
+  return data;
 }
 
 async function fetchFolderContents(
@@ -80,7 +117,15 @@ async function fetchFolderContents(
     }
     throw new Error("Failed to fetch folder contents");
   }
-  return response.json();
+  const result = await response.json();
+
+  // Handle new pagination response format
+  if (result.data) {
+    return result.data;
+  }
+
+  // Fallback for old format
+  return result;
 }
 
 function FileIconComponent({ file }: { file: StackFile | StackDirectory }) {
@@ -160,27 +205,59 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
     Map<string, (StackFile | StackDirectory)[]>
   >(new Map());
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [totalFiles, setTotalFiles] = useState<number>(0);
+  const pageSize = 100;
+
   const queryClient = useQueryClient();
 
-  // Set initial data in the query cache
-  queryClient.setQueryData(
-    ["connection-files", initialData.selectedConnection?.connection_id],
-    initialData.files
-  );
-
   const {
-    data: files = [],
+    data: paginatedData,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["connection-files", selectedConnectionId],
-    queryFn: () => fetchConnectionFiles(selectedConnectionId),
+    queryKey: ["connection-files", selectedConnectionId, currentPage],
+    queryFn: () => fetchConnectionFiles(selectedConnectionId, cursor, pageSize),
     enabled: !!selectedConnectionId,
-    initialData:
-      selectedConnectionId === initialData.selectedConnection?.connection_id
-        ? initialData.files
-        : undefined,
   });
+
+  const files = paginatedData?.data || [];
+
+  // Update pagination state when data changes
+  React.useEffect(() => {
+    if (paginatedData) {
+      setTotalFiles(paginatedData.total);
+      setHasMore(paginatedData.hasMore);
+    }
+  }, [paginatedData]);
+
+  // Pagination navigation functions
+  const handleNextPage = () => {
+    if (hasMore) {
+      setCurrentPage((prev) => prev + 1);
+      // In a real API, you'd get the cursor from the response
+      // For now, we'll simulate it
+      setCursor(`page-${currentPage + 1}`);
+      setSelectedFiles(new Set()); // Clear selection when changing pages
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage((prev) => prev - 1);
+      setCursor(currentPage > 2 ? `page-${currentPage - 1}` : undefined);
+      setSelectedFiles(new Set()); // Clear selection when changing pages
+    }
+  };
+
+  const handleGoToPage = (page: number) => {
+    setCurrentPage(page);
+    setCursor(page > 1 ? `page-${page}` : undefined);
+    setSelectedFiles(new Set()); // Clear selection when changing pages
+  };
 
   const handleIndexFiles = async () => {
     const filesToIndex = Array.from(selectedFiles);
@@ -523,6 +600,37 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
 
           <CardContent>{renderFilesContent()}</CardContent>
         </Card>
+
+        {/* Pagination Controls */}
+        {files.length > 0 && (
+          <div className="mt-6 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Page {currentPage} of {Math.ceil(totalFiles / pageSize)}
+              {totalFiles > 0 && ` (${totalFiles} total files)`}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrevPage}
+                disabled={currentPage === 1 || isLoading}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={!hasMore || isLoading}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Action Panel */}
         {selectedFiles.size > 0 && (

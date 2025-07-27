@@ -1,8 +1,5 @@
 import FileExplorer from "@/components/file-explorer";
-import {
-  createServerAuthenticatedClient,
-  getTokenFromCookies,
-} from "@/lib/auth";
+import { getTokenFromCookies } from "@/lib/auth";
 import { USER_SETTINGS } from "@/lib/constants";
 import {
   ApiError,
@@ -11,7 +8,6 @@ import {
   StackFile,
 } from "@/stack-api-autogen";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 
 interface ServerData {
   connections: ConnectionCard[];
@@ -46,50 +42,15 @@ const hardcodedConnection: ConnectionCard = {
   },
 };
 
-async function loadServerData(token: string): Promise<ServerData> {
-  try {
-    const client = await createServerAuthenticatedClient(token);
+async function loadServerData(): Promise<ServerData> {
+  // Use hardcoded connection data, files will be fetched client-side
+  const connectionList = [hardcodedConnection];
 
-    // Use hardcoded connection instead of fetching connections
-    const connectionList = [hardcodedConnection];
-
-    try {
-      // Fetch files for the hardcoded connection
-      const filesResponse =
-        await client.connections.getChildrenResourcesConnectionsConnectionIdResourcesChildrenGet(
-          hardcodedConnection.connection_id!,
-          undefined,
-          undefined,
-          100
-        );
-
-      return {
-        connections: connectionList,
-        selectedConnection: hardcodedConnection,
-        files: filesResponse.data || [],
-      };
-    } catch (filesError) {
-      if (isUnauthorizedError(filesError)) {
-        redirect("/api/auth/server-logout");
-      }
-      console.error("Failed to load files for connection:", filesError);
-      return {
-        connections: connectionList,
-        selectedConnection: hardcodedConnection,
-        files: [],
-      };
-    }
-  } catch (error) {
-    if (isUnauthorizedError(error)) {
-      redirect("/api/auth/server-logout");
-    }
-    console.error("Failed to load server data:", error);
-    return {
-      connections: [hardcodedConnection],
-      selectedConnection: hardcodedConnection,
-      files: [],
-    };
-  }
+  return {
+    connections: connectionList,
+    selectedConnection: hardcodedConnection,
+    files: [], // Empty array - files will be fetched client-side
+  };
 }
 
 export default async function Home() {
@@ -102,7 +63,7 @@ export default async function Home() {
     return <div>Authentication required</div>;
   }
 
-  const serverData = await loadServerData(token);
+  const serverData = await loadServerData();
 
   return <FileExplorer initialData={serverData} />;
 }
