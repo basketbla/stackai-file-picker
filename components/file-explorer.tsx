@@ -27,7 +27,6 @@ import {
 import { Checkbox } from "./ui/checkbox";
 
 import { Separator } from "./ui/separator";
-import { Skeleton } from "./ui/skeleton";
 import {
   Table,
   TableBody,
@@ -400,33 +399,12 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
 
   // TODO: inline function call isn't great, fix
   const renderFilesContent = () => {
-    if (isLoading) {
-      return (
-        <div className="space-y-2">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
-      );
-    }
-
     if (error) {
       return (
         <div className="text-center py-8 text-destructive">
           <p>Failed to load files.</p>
           <p className="text-sm text-muted-foreground">
             Please try again later.
-          </p>
-        </div>
-      );
-    }
-
-    if (files.length === 0) {
-      return (
-        <div className="text-center py-8 text-muted-foreground">
-          <p>No files found in this connection.</p>
-          <p className="text-sm">
-            Files from your connected drive will appear here.
           </p>
         </div>
       );
@@ -458,103 +436,144 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
               />
             </TableHead>
             <TableHead className="w-1/2">Name</TableHead>
-            <TableHead className="w-24">Size</TableHead>
+            <TableHead className="w-24 shrink-0">Size</TableHead>
             <TableHead className="w-32">Modified</TableHead>
             <TableHead className="w-24">Indexed</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {getFlattenedFiles().map(({ file, depth, isLoading }, index) => {
-            const fileId = file.resource_id || `${index}`;
-            const isSelected = selectedFiles.has(fileId);
-            const indexingStatus =
-              fileIndexingStatus.get(fileId) ||
-              ((file as StackFile).status === "indexed"
-                ? "indexed"
-                : "not_indexed");
-            const isFolder = file.inode_type === "directory";
-
-            // Handle loading skeleton
-            if (isLoading) {
-              return (
-                <TableRow key={fileId} className="animate-pulse">
-                  <TableCell className="w-6 pr-0">
+          {/* Show skeleton rows when loading */}
+          {isLoading && !error ? (
+            Array.from({ length: 10 }, (_, i) => (
+              <TableRow
+                key={`skeleton-${i}`}
+                className="animate-pulse h-[39px]"
+              >
+                <TableCell className="w-6 pr-0">
+                  <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                </TableCell>
+                <TableCell className="w-1/2 flex items-center h-[39px]">
+                  <div className="flex items-center space-x-2">
                     <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                    <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                  </div>
+                </TableCell>
+                <TableCell className="w-24">
+                  <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                </TableCell>
+                <TableCell className="w-32">
+                  <div className="h-4 w-20 bg-gray-200 rounded"></div>
+                </TableCell>
+                <TableCell className="w-24">
+                  <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                </TableCell>
+              </TableRow>
+            ))
+          ) : files.length === 0 && !isLoading ? (
+            <TableRow>
+              <TableCell
+                colSpan={5}
+                className="text-center py-8 text-muted-foreground"
+              >
+                <p>No files found in this connection.</p>
+                <p className="text-sm">
+                  Files from your connected drive will appear here.
+                </p>
+              </TableCell>
+            </TableRow>
+          ) : (
+            getFlattenedFiles().map(({ file, depth, isLoading }, index) => {
+              const fileId = file.resource_id || `${index}`;
+              const isSelected = selectedFiles.has(fileId);
+              const indexingStatus =
+                fileIndexingStatus.get(fileId) ||
+                ((file as StackFile).status === "indexed"
+                  ? "indexed"
+                  : "not_indexed");
+              const isFolder = file.inode_type === "directory";
+
+              // Handle loading skeleton
+              if (isLoading) {
+                return (
+                  <TableRow key={fileId} className="animate-pulse h-[39px]">
+                    <TableCell className="w-6 pr-0">
+                      <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                    </TableCell>
+                    <TableCell className="w-1/2 flex items-center h-[39px]">
+                      <div
+                        style={{ marginLeft: `${depth * 20}px` }}
+                        className="flex items-center space-x-2"
+                      >
+                        <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                        <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="w-24">
+                      <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                    </TableCell>
+                    <TableCell className="w-32">
+                      <div className="h-4 w-20 bg-gray-200 rounded"></div>
+                    </TableCell>
+                    <TableCell className="w-24">
+                      <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+
+              return (
+                <TableRow key={fileId}>
+                  <TableCell className="w-6">
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(checked: boolean) => {
+                        const newSelected = new Set(selectedFiles);
+                        if (checked) {
+                          newSelected.add(fileId);
+                        } else {
+                          newSelected.delete(fileId);
+                        }
+                        setSelectedFiles(newSelected);
+                      }}
+                    />
                   </TableCell>
                   <TableCell className="w-1/2 flex items-center space-x-2">
                     <div
                       style={{ marginLeft: `${depth * 20}px` }}
                       className="flex items-center space-x-2"
                     >
-                      <div className="h-4 w-4 bg-gray-200 rounded"></div>
-                      <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                      <FileIconComponent file={file} />
+                      {isFolder ? (
+                        <button
+                          className="font-medium cursor-pointer hover:text-blue-600"
+                          onClick={() =>
+                            handleFolderClick(file as StackDirectory)
+                          }
+                        >
+                          {file.inode_path?.path?.split("/").pop() || "Unnamed"}
+                        </button>
+                      ) : (
+                        <span className="font-medium">
+                          {file.inode_path?.path?.split("/").pop() || "Unnamed"}
+                        </span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="w-24">
-                    <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                    {file.inode_type === "directory"
+                      ? "-"
+                      : formatFileSize((file as StackFile).size || 0)}
                   </TableCell>
                   <TableCell className="w-32">
-                    <div className="h-4 w-20 bg-gray-200 rounded"></div>
+                    {file.modified_at ? formatDate(file.modified_at) : "-"}
                   </TableCell>
                   <TableCell className="w-24">
-                    <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                    {renderIndexingStatus(indexingStatus, file.modified_at)}
                   </TableCell>
                 </TableRow>
               );
-            }
-
-            return (
-              <TableRow key={fileId}>
-                <TableCell className="w-6">
-                  <Checkbox
-                    checked={isSelected}
-                    onCheckedChange={(checked: boolean) => {
-                      const newSelected = new Set(selectedFiles);
-                      if (checked) {
-                        newSelected.add(fileId);
-                      } else {
-                        newSelected.delete(fileId);
-                      }
-                      setSelectedFiles(newSelected);
-                    }}
-                  />
-                </TableCell>
-                <TableCell className="w-1/2 flex items-center space-x-2">
-                  <div
-                    style={{ marginLeft: `${depth * 20}px` }}
-                    className="flex items-center space-x-2"
-                  >
-                    <FileIconComponent file={file} />
-                    {isFolder ? (
-                      <button
-                        className="font-medium cursor-pointer hover:text-blue-600"
-                        onClick={() =>
-                          handleFolderClick(file as StackDirectory)
-                        }
-                      >
-                        {file.inode_path?.path?.split("/").pop() || "Unnamed"}
-                      </button>
-                    ) : (
-                      <span className="font-medium">
-                        {file.inode_path?.path?.split("/").pop() || "Unnamed"}
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="w-24">
-                  {file.inode_type === "directory"
-                    ? "-"
-                    : formatFileSize((file as StackFile).size || 0)}
-                </TableCell>
-                <TableCell className="w-32">
-                  {file.modified_at ? formatDate(file.modified_at) : "-"}
-                </TableCell>
-                <TableCell className="w-24">
-                  {renderIndexingStatus(indexingStatus, file.modified_at)}
-                </TableCell>
-              </TableRow>
-            );
-          })}
+            })
+          )}
         </TableBody>
       </Table>
     );
