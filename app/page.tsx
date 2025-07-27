@@ -3,6 +3,7 @@ import {
   createServerAuthenticatedClient,
   getTokenFromCookies,
 } from "@/lib/auth";
+import { USER_SETTINGS } from "@/lib/constants";
 import {
   ApiError,
   ConnectionCard,
@@ -25,59 +26,67 @@ function isUnauthorizedError(error: unknown): boolean {
   return false;
 }
 
+// Create a hardcoded connection based on USER_SETTINGS
+const hardcodedConnection: ConnectionCard = {
+  connection_id: USER_SETTINGS.connection_id,
+  user_id: "hardcoded-user",
+  org_id: USER_SETTINGS.org_id,
+  connection_provider: USER_SETTINGS.connection_provider_type,
+  connection_provider_data: {
+    can_be_knowledge_base: true,
+  },
+  created_by: {
+    id: "hardcoded-user",
+    email: "user@example.com",
+    avatar_url: null,
+    full_name: null,
+    has_completed_onboarding: null,
+    last_signed_in: null,
+    updated_at: null,
+  },
+};
+
 async function loadServerData(token: string): Promise<ServerData> {
   try {
     const client = await createServerAuthenticatedClient(token);
 
-    // Fetch all connections
-    const connections = await client.connections.getConnectionsConnectionsGet();
-    const connectionList = connections || [];
+    // Use hardcoded connection instead of fetching connections
+    const connectionList = [hardcodedConnection];
 
-    // Get the first connection and its files
-    if (connectionList.length > 0) {
-      const firstConnection = connectionList[0];
+    try {
+      // Fetch files for the hardcoded connection
+      const filesResponse =
+        await client.connections.getChildrenResourcesConnectionsConnectionIdResourcesChildrenGet(
+          hardcodedConnection.connection_id!,
+          undefined,
+          undefined,
+          100
+        );
 
-      try {
-        // Fetch files for the first connection
-        const filesResponse =
-          await client.connections.getChildrenResourcesConnectionsConnectionIdResourcesChildrenGet(
-            firstConnection.connection_id!,
-            undefined, // no specific resource_id, get root files
-            undefined, // no cursor
-            100 // page size
-          );
-
-        return {
-          connections: connectionList,
-          selectedConnection: firstConnection,
-          files: filesResponse.data || [],
-        };
-      } catch (filesError) {
-        if (isUnauthorizedError(filesError)) {
-          redirect("/api/auth/server-logout");
-        }
-        console.error("Failed to load files for connection:", filesError);
-        return {
-          connections: connectionList,
-          selectedConnection: firstConnection,
-          files: [],
-        };
+      return {
+        connections: connectionList,
+        selectedConnection: hardcodedConnection,
+        files: filesResponse.data || [],
+      };
+    } catch (filesError) {
+      if (isUnauthorizedError(filesError)) {
+        redirect("/api/auth/server-logout");
       }
+      console.error("Failed to load files for connection:", filesError);
+      return {
+        connections: connectionList,
+        selectedConnection: hardcodedConnection,
+        files: [],
+      };
     }
-
-    return {
-      connections: connectionList,
-      selectedConnection: null,
-      files: [],
-    };
   } catch (error) {
     if (isUnauthorizedError(error)) {
       redirect("/api/auth/server-logout");
     }
     console.error("Failed to load server data:", error);
     return {
-      connections: [],
-      selectedConnection: null,
+      connections: [hardcodedConnection],
+      selectedConnection: hardcodedConnection,
       files: [],
     };
   }

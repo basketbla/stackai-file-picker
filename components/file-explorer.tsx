@@ -3,7 +3,8 @@
 import { logoutAndRedirect } from "@/lib/auth";
 import { ConnectionCard, StackDirectory, StackFile } from "@/stack-api-autogen";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, File, FileText, Folder, X } from "lucide-react";
+import { Check, File, FileText, Folder, Settings, X } from "lucide-react";
+import Link from "next/link";
 import React, { useState } from "react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -15,13 +16,7 @@ import {
   CardTitle,
 } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
+
 import { Separator } from "./ui/separator";
 import { Skeleton } from "./ui/skeleton";
 import {
@@ -186,14 +181,6 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
         ? initialData.files
         : undefined,
   });
-
-  const handleConnectionChange = (connectionId: string) => {
-    setSelectedConnectionId(connectionId);
-    setSelectedFiles(new Set()); // Clear selection when changing connections
-    setExpandedFolders(new Set()); // Clear expanded folders when changing connections
-    setCurrentlyLoadingFiles(new Set()); // Clear loading files when changing connections
-    setFolderContents(new Map()); // Clear folder contents when changing connections
-  };
 
   const handleIndexFiles = async () => {
     const filesToIndex = Array.from(selectedFiles);
@@ -519,32 +506,18 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
               <div>
                 <CardTitle>Files</CardTitle>
                 <CardDescription>
-                  Browse files from your connected drives
+                  Browse files from your connected drive
                 </CardDescription>
               </div>
 
-              {initialData.connections.length > 1 && (
-                <div>
-                  <Select
-                    value={selectedConnectionId}
-                    onValueChange={handleConnectionChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a connection" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {initialData.connections.map((connection, index) => (
-                        <SelectItem
-                          key={connection.connection_id}
-                          value={connection.connection_id!}
-                        >
-                          {`Conn ${index + 1}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div>
+                <Link href="/settings">
+                  <Button variant="outline" size="sm">
+                    <Settings className="h-4 w-4 mr-2" />
+                    User Settings
+                  </Button>
+                </Link>
+              </div>
             </div>
           </CardHeader>
 
