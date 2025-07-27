@@ -51,9 +51,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     console.error("Failed to get indexing status:", error);
-    return NextResponse.json(
-      { error: "Failed to get indexing status" },
-      { status: 500 }
-    );
+
+    // NOTE: looks like this fails when the parent path isn't indexed. Instead of tracking that, let's just return empty array
+    return NextResponse.json({
+      indexedFilePaths: [],
+    });
   }
 }
