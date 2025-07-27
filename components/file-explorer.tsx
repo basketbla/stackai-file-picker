@@ -255,12 +255,12 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                       <SelectValue placeholder="Select a connection" />
                     </SelectTrigger>
                     <SelectContent>
-                      {initialData.connections.map((connection) => (
+                      {initialData.connections.map((connection, index) => (
                         <SelectItem
                           key={connection.connection_id}
                           value={connection.connection_id!}
                         >
-                          {connection.name || "Unnamed Connection"}
+                          {`Conn ${index + 1}`}
                         </SelectItem>
                       ))}
                     </SelectContent>
