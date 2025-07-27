@@ -57,6 +57,12 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    // Trigger sync to index the new files (don't await)
+    client.knowledgeBases.synchronizeKnowledgeBaseKnowledgeBasesSyncTriggerKnowledgeBaseIdOrgIdGet(
+      kbData.org_id,
+      knowledgeBaseId
+    );
+
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {

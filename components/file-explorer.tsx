@@ -159,6 +159,99 @@ function getAllFileIds(
   return ids;
 }
 
+// Recursively fetch all contents of folders for indexing
+async function getAllFolderContentsForIndexing(
+  selectedFileIds: string[],
+  files: (StackFile | StackDirectory)[],
+  folderContents: Map<string, (StackFile | StackDirectory)[]>,
+  connectionId: string
+): Promise<string[]> {
+  const allFileIds = new Set<string>();
+  const processedFolders = new Set<string>();
+
+  // Helper function to recursively fetch folder contents
+  const fetchFolderRecursively = async (folderId: string): Promise<void> => {
+    if (processedFolders.has(folderId)) return;
+    processedFolders.add(folderId);
+
+    // Add the folder itself
+    allFileIds.add(folderId);
+
+    // Check if we already have the contents in cache
+    let contents = folderContents.get(folderId);
+
+    // If not in cache, fetch from API
+    if (!contents) {
+      try {
+        contents = await fetchFolderContents(connectionId, folderId);
+      } catch (error) {
+        console.error(
+          `Failed to fetch contents for folder ${folderId}:`,
+          error
+        );
+        return;
+      }
+    }
+
+    // Process all items in this folder
+    for (const item of contents) {
+      if (item.resource_id) {
+        allFileIds.add(item.resource_id);
+
+        // If it's a subfolder, recursively fetch its contents
+        if (item.inode_type === "directory") {
+          await fetchFolderRecursively(item.resource_id);
+        }
+      }
+    }
+  };
+
+  // Find selected folders and files
+  const selectedFolders: string[] = [];
+  const selectedFiles: string[] = [];
+
+  for (const fileId of selectedFileIds) {
+    // Find the file object to check if it's a folder
+    const findFileInList = (
+      list: (StackFile | StackDirectory)[]
+    ): StackFile | StackDirectory | null => {
+      for (const file of list) {
+        if (file.resource_id === fileId) return file;
+        // Also check in folder contents
+        if (file.inode_type === "directory") {
+          const children = folderContents.get(file.resource_id || "");
+          if (children) {
+            const found = findFileInList(children);
+            if (found) return found;
+          }
+        }
+      }
+      return null;
+    };
+
+    const fileObj = findFileInList(files);
+    if (fileObj) {
+      if (fileObj.inode_type === "directory") {
+        selectedFolders.push(fileId);
+      } else {
+        selectedFiles.push(fileId);
+        allFileIds.add(fileId);
+      }
+    } else {
+      // If we can't find it in the current view, assume it's a file
+      selectedFiles.push(fileId);
+      allFileIds.add(fileId);
+    }
+  }
+
+  // Recursively fetch all folder contents
+  for (const folderId of selectedFolders) {
+    await fetchFolderRecursively(folderId);
+  }
+
+  return Array.from(allFileIds);
+}
+
 // API functions for indexing operations
 async function indexFiles(fileIds: string[]): Promise<void> {
   const response = await fetch("/api/knowledge-base/index", {
@@ -374,30 +467,44 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
   };
 
   const handleIndexFiles = async () => {
-    const filesToIndex = Array.from(selectedFiles);
+    const selectedFileIds = Array.from(selectedFiles);
 
-    // Set files to indexing state
+    // Set selected files to indexing state
     const newStatus = new Map(fileIndexingStatus);
-    filesToIndex.forEach((fileId) => {
+    selectedFileIds.forEach((fileId) => {
       newStatus.set(fileId, "indexing");
     });
     setFileIndexingStatus(newStatus);
 
     try {
-      // Make actual API call to index files
-      await indexFiles(filesToIndex);
+      console.log("Fetching all folder contents for indexing...");
 
-      // Update status to indexed on success
+      // Get all files including recursive folder contents
+      const allFilesToIndex = await getAllFolderContentsForIndexing(
+        selectedFileIds,
+        files,
+        folderContents,
+        selectedConnectionId
+      );
+
+      console.log(
+        `Found ${allFilesToIndex.length} total files to index (including folder contents)`
+      );
+
+      // Make actual API call to index all files
+      await indexFiles(allFilesToIndex);
+
+      // Update status to indexed on success for all files
       const updatedStatus = new Map(fileIndexingStatus);
-      filesToIndex.forEach((fileId) => {
+      allFilesToIndex.forEach((fileId) => {
         updatedStatus.set(fileId, "indexed");
       });
       setFileIndexingStatus(updatedStatus);
       setSelectedFiles(new Set());
     } catch (error) {
-      // Reset status on error
+      // Reset status on error for selected files
       const resetStatus = new Map(fileIndexingStatus);
-      filesToIndex.forEach((fileId) => {
+      selectedFileIds.forEach((fileId) => {
         resetStatus.set(fileId, "not_indexed");
       });
       setFileIndexingStatus(resetStatus);
@@ -407,15 +514,29 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
   };
 
   const handleUnindexFiles = async () => {
-    const filesToUnindex = Array.from(selectedFiles);
+    const selectedFileIds = Array.from(selectedFiles);
 
     try {
-      // Make actual API call to unindex files
-      await unindexFiles(filesToUnindex);
+      console.log("Fetching all folder contents for unindexing...");
 
-      // Update status to not_indexed on success
+      // Get all files including recursive folder contents
+      const allFilesToUnindex = await getAllFolderContentsForIndexing(
+        selectedFileIds,
+        files,
+        folderContents,
+        selectedConnectionId
+      );
+
+      console.log(
+        `Found ${allFilesToUnindex.length} total files to unindex (including folder contents)`
+      );
+
+      // Make actual API call to unindex all files
+      await unindexFiles(allFilesToUnindex);
+
+      // Update status to not_indexed on success for all files
       const newStatus = new Map(fileIndexingStatus);
-      filesToUnindex.forEach((fileId) => {
+      allFilesToUnindex.forEach((fileId) => {
         newStatus.set(fileId, "not_indexed");
       });
       setFileIndexingStatus(newStatus);
