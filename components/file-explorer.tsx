@@ -71,6 +71,23 @@ async function fetchConnectionFiles(
   return response.json();
 }
 
+async function fetchFolderContents(
+  connectionId: string,
+  folderResourceId: string
+): Promise<(StackFile | StackDirectory)[]> {
+  const response = await fetch(
+    `/api/connections/${connectionId}/files?resource_id=${folderResourceId}`
+  );
+  if (!response.ok) {
+    if (response.status === 401) {
+      await logoutAndRedirect();
+      throw new Error("Unauthorized");
+    }
+    throw new Error("Failed to fetch folder contents");
+  }
+  return response.json();
+}
+
 function FileIconComponent({ file }: { file: StackFile | StackDirectory }) {
   if (file.inode_type === "directory") {
     return <Folder className="h-4 w-4 text-blue-500" />;
@@ -138,6 +155,15 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
   const [fileIndexingStatus, setFileIndexingStatus] = useState<
     Map<string, IndexingStatus>
   >(new Map());
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
+    new Set()
+  );
+  const [currentlyLoadingFiles, setCurrentlyLoadingFiles] = useState<
+    Set<string>
+  >(new Set());
+  const [folderContents, setFolderContents] = useState<
+    Map<string, (StackFile | StackDirectory)[]>
+  >(new Map());
 
   const queryClient = useQueryClient();
 
@@ -164,6 +190,9 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
   const handleConnectionChange = (connectionId: string) => {
     setSelectedConnectionId(connectionId);
     setSelectedFiles(new Set()); // Clear selection when changing connections
+    setExpandedFolders(new Set()); // Clear expanded folders when changing connections
+    setCurrentlyLoadingFiles(new Set()); // Clear loading files when changing connections
+    setFolderContents(new Map()); // Clear folder contents when changing connections
   };
 
   const handleIndexFiles = async () => {
@@ -197,6 +226,103 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
     });
     setFileIndexingStatus(newStatus);
     setSelectedFiles(new Set());
+  };
+
+  const handleFolderClick = async (folder: StackDirectory) => {
+    const folderId = folder.resource_id;
+    if (!folderId) return;
+
+    if (expandedFolders.has(folderId)) {
+      // Collapse folder
+      const newExpanded = new Set(expandedFolders);
+      newExpanded.delete(folderId);
+      setExpandedFolders(newExpanded);
+    } else {
+      // Expand folder
+      const newExpanded = new Set(expandedFolders);
+      newExpanded.add(folderId);
+      setExpandedFolders(newExpanded);
+
+      // If we don't have contents cached, fetch them
+      if (!folderContents.has(folderId)) {
+        // Add to loading state
+        const newLoading = new Set(currentlyLoadingFiles);
+        newLoading.add(folderId);
+        setCurrentlyLoadingFiles(newLoading);
+
+        try {
+          const contents = await fetchFolderContents(
+            selectedConnectionId,
+            folderId
+          );
+
+          // Update folder contents
+          const newContents = new Map(folderContents);
+          newContents.set(folderId, contents);
+          setFolderContents(newContents);
+        } catch (error) {
+          console.error("Failed to fetch folder contents:", error);
+        } finally {
+          // Remove from loading state
+          const newLoading = new Set(currentlyLoadingFiles);
+          newLoading.delete(folderId);
+          setCurrentlyLoadingFiles(newLoading);
+        }
+      }
+    }
+  };
+
+  // Flatten files with their nested contents
+  const getFlattenedFiles = () => {
+    const flattened: Array<{
+      file: StackFile | StackDirectory;
+      depth: number;
+      isLoading?: boolean;
+    }> = [];
+
+    const addFiles = (
+      fileList: (StackFile | StackDirectory)[],
+      depth: number = 0
+    ) => {
+      fileList.forEach((file) => {
+        flattened.push({ file, depth });
+
+        // If it's an expanded folder, add its contents or loading skeleton
+        if (
+          file.inode_type === "directory" &&
+          file.resource_id &&
+          expandedFolders.has(file.resource_id)
+        ) {
+          if (currentlyLoadingFiles.has(file.resource_id)) {
+            // Add loading skeleton
+            flattened.push({
+              file: {
+                resource_id: `loading-${file.resource_id}`,
+                inode_type: "file" as const,
+                inode_path: { path: "Loading..." },
+                knowledge_base_id: "",
+                inode_id: "",
+                content_hash: "",
+                content_mime: "",
+                size: 0,
+                status: "not_indexed",
+              } as unknown as StackFile,
+              depth: depth + 1,
+              isLoading: true,
+            });
+          } else {
+            // Add actual contents if we have them
+            const contents = folderContents.get(file.resource_id);
+            if (contents) {
+              addFiles(contents, depth + 1);
+            }
+          }
+        }
+      });
+    };
+
+    addFiles(files);
+    return flattened;
   };
 
   // TODO: inline function call isn't great, fix
@@ -240,12 +366,17 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
             <TableHead className="w-12">
               <Checkbox
                 checked={
-                  selectedFiles.size === files.length && files.length > 0
+                  selectedFiles.size === getFlattenedFiles().length &&
+                  getFlattenedFiles().length > 0
                 }
                 onCheckedChange={(checked: boolean) => {
                   if (checked) {
                     setSelectedFiles(
-                      new Set(files.map((f) => f.resource_id || ""))
+                      new Set(
+                        getFlattenedFiles().map(
+                          ({ file }) => file.resource_id || ""
+                        )
+                      )
                     );
                   } else {
                     setSelectedFiles(new Set());
@@ -260,7 +391,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {files.map((file, index) => {
+          {getFlattenedFiles().map(({ file, depth, isLoading }, index) => {
             const fileId = file.resource_id || `${index}`;
             const isSelected = selectedFiles.has(fileId);
             const indexingStatus =
@@ -268,6 +399,36 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
               ((file as StackFile).status === "indexed"
                 ? "indexed"
                 : "not_indexed");
+            const isFolder = file.inode_type === "directory";
+
+            // Handle loading skeleton
+            if (isLoading) {
+              return (
+                <TableRow key={fileId} className="animate-pulse">
+                  <TableCell>
+                    <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                  </TableCell>
+                  <TableCell className="flex items-center space-x-2">
+                    <div
+                      style={{ marginLeft: `${depth * 20}px` }}
+                      className="flex items-center space-x-2"
+                    >
+                      <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                      <div className="h-4 w-24 bg-gray-200 rounded"></div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 w-20 bg-gray-200 rounded"></div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                  </TableCell>
+                </TableRow>
+              );
+            }
 
             return (
               <TableRow key={fileId}>
@@ -286,10 +447,26 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                   />
                 </TableCell>
                 <TableCell className="flex items-center space-x-2">
-                  <FileIconComponent file={file} />
-                  <span className="font-medium">
-                    {file.inode_path?.path?.split("/").pop() || "Unnamed"}
-                  </span>
+                  <div
+                    style={{ marginLeft: `${depth * 20}px` }}
+                    className="flex items-center space-x-2"
+                  >
+                    <FileIconComponent file={file} />
+                    {isFolder ? (
+                      <span
+                        className="font-medium cursor-pointer hover:text-blue-600"
+                        onClick={() =>
+                          handleFolderClick(file as StackDirectory)
+                        }
+                      >
+                        {file.inode_path?.path?.split("/").pop() || "Unnamed"}
+                      </span>
+                    ) : (
+                      <span className="font-medium">
+                        {file.inode_path?.path?.split("/").pop() || "Unnamed"}
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   {file.inode_type === "directory"
