@@ -228,48 +228,57 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
     setSelectedFiles(new Set());
   };
 
-  const handleFolderClick = async (folder: StackDirectory) => {
+  const handleFolderClick = (folder: StackDirectory) => {
     const folderId = folder.resource_id;
     if (!folderId) return;
 
-    if (expandedFolders.has(folderId)) {
-      // Collapse folder
-      const newExpanded = new Set(expandedFolders);
-      newExpanded.delete(folderId);
-      setExpandedFolders(newExpanded);
-    } else {
-      // Expand folder
-      const newExpanded = new Set(expandedFolders);
-      newExpanded.add(folderId);
-      setExpandedFolders(newExpanded);
+    setExpandedFolders((prevExpanded) => {
+      const wasExpanded = prevExpanded.has(folderId);
+      const newExpanded = new Set(prevExpanded);
 
-      // If we don't have contents cached, fetch them
-      if (!folderContents.has(folderId)) {
-        // Add to loading state
-        const newLoading = new Set(currentlyLoadingFiles);
-        newLoading.add(folderId);
-        setCurrentlyLoadingFiles(newLoading);
+      if (wasExpanded) {
+        // Collapse folder
+        newExpanded.delete(folderId);
+      } else {
+        // Expand folder
+        newExpanded.add(folderId);
 
-        try {
-          const contents = await fetchFolderContents(
-            selectedConnectionId,
-            folderId
-          );
+        // Check if we need to fetch contents (only when expanding)
+        setFolderContents((prevContents) => {
+          if (!prevContents.has(folderId)) {
+            // Start loading
+            setCurrentlyLoadingFiles((prevLoading) => {
+              const newLoading = new Set(prevLoading);
+              newLoading.add(folderId);
+              return newLoading;
+            });
 
-          // Update folder contents
-          const newContents = new Map(folderContents);
-          newContents.set(folderId, contents);
-          setFolderContents(newContents);
-        } catch (error) {
-          console.error("Failed to fetch folder contents:", error);
-        } finally {
-          // Remove from loading state
-          const newLoading = new Set(currentlyLoadingFiles);
-          newLoading.delete(folderId);
-          setCurrentlyLoadingFiles(newLoading);
-        }
+            // Fetch contents
+            fetchFolderContents(selectedConnectionId, folderId)
+              .then((contents) => {
+                setFolderContents((prevContents) => {
+                  const newContents = new Map(prevContents);
+                  newContents.set(folderId, contents);
+                  return newContents;
+                });
+              })
+              .catch((error) => {
+                console.error("Failed to fetch folder contents:", error);
+              })
+              .finally(() => {
+                setCurrentlyLoadingFiles((prevLoading) => {
+                  const newLoading = new Set(prevLoading);
+                  newLoading.delete(folderId);
+                  return newLoading;
+                });
+              });
+          }
+          return prevContents;
+        });
       }
-    }
+
+      return newExpanded;
+    });
   };
 
   // Flatten files with their nested contents
@@ -453,14 +462,14 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                   >
                     <FileIconComponent file={file} />
                     {isFolder ? (
-                      <span
+                      <button
                         className="font-medium cursor-pointer hover:text-blue-600"
                         onClick={() =>
                           handleFolderClick(file as StackDirectory)
                         }
                       >
                         {file.inode_path?.path?.split("/").pop() || "Unnamed"}
-                      </span>
+                      </button>
                     ) : (
                       <span className="font-medium">
                         {file.inode_path?.path?.split("/").pop() || "Unnamed"}
