@@ -30,6 +30,8 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+// NOTE: Connection and KB are hardcoded for now. In a production version, this page would
+// probably include some way to manage KB's + connections
 export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-gray-50">

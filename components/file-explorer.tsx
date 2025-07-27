@@ -2,7 +2,7 @@
 
 import { logoutAndRedirect } from "@/lib/auth";
 import { USER_SETTINGS } from "@/lib/constants";
-import { ConnectionCard, StackDirectory, StackFile } from "@/stack-api-autogen";
+import { StackDirectory, StackFile } from "@/stack-api-autogen";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -44,16 +44,6 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
-
-interface ServerData {
-  connections: ConnectionCard[];
-  selectedConnection: ConnectionCard | null;
-  files: (StackFile | StackDirectory)[];
-}
-
-interface FileExplorerProps {
-  initialData: ServerData;
-}
 
 type IndexingStatus = "indexed" | "not_indexed" | "indexing" | "unindexing";
 
@@ -426,10 +416,8 @@ function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString();
 }
 
-export default function FileExplorer({ initialData }: FileExplorerProps) {
-  const [selectedConnectionId, setSelectedConnectionId] = useState<string>(
-    initialData.selectedConnection?.connection_id || ""
-  );
+export default function FileExplorer() {
+  const selectedConnectionId = USER_SETTINGS?.connection_id;
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [fileIndexingStatus, setFileIndexingStatus] = useState<
     Map<string, IndexingStatus>
@@ -1185,7 +1173,7 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center">
               <Separator orientation="vertical" className="h-6" />
               <h1 className="text-xl font-semibold text-gray-900">
                 StackAI File Explorer

@@ -40,11 +40,6 @@ export async function getAuthHeaders(
   };
 }
 
-export function getStoredToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("stack_ai_token");
-}
-
 export function storeToken(token: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem("stack_ai_token", token);
@@ -70,10 +65,10 @@ export async function logoutAndRedirect(): Promise<void> {
   } catch (error) {
     console.error("Error calling logout route:", error);
   }
-  
+
   // Clear client-side storage
   clearToken();
-  
+
   // Redirect to login
   window.location.href = "/login";
 }

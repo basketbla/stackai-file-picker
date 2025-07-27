@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Trigger sync to index the new files (don't await)
+    // Trigger sync in background
     client.knowledgeBases.synchronizeKnowledgeBaseKnowledgeBasesSyncTriggerKnowledgeBaseIdOrgIdGet(
       kbData.org_id,
       knowledgeBaseId

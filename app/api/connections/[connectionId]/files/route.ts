@@ -42,20 +42,20 @@ export async function GET(
           (
             await params
           ).connectionId,
-          resourceId || undefined, // use resource_id if provided, undefined for root files
-          cursor || undefined, // use cursor for pagination
-          pageSize // configurable page size
+          resourceId || undefined,
+          cursor || undefined,
+          pageSize
         );
 
     // Return pagination-aware response
     const data = filesResponse.data || [];
-    const hasMore = data.length === pageSize; // Simple heuristic - if we got a full page, there might be more
+    const hasMore = data.length === pageSize;
 
     return NextResponse.json({
       data,
-      total: data.length, // In a real implementation, this would come from the API
+      total: data.length,
       hasMore,
-      cursor: hasMore ? `next-${cursor || "start"}` : null, // Generate next cursor
+      cursor: hasMore ? `next-${cursor || "start"}` : null,
     });
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {

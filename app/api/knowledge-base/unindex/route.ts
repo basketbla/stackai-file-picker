@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Trigger sync to update the index
+    // Trigger sync in background
     client.knowledgeBases.synchronizeKnowledgeBaseKnowledgeBasesSyncTriggerKnowledgeBaseIdOrgIdGet(
       kbData.org_id,
       knowledgeBaseId
