@@ -11,6 +11,7 @@ import {
   File,
   FileText,
   Folder,
+  Search,
   Settings,
   X,
 } from "lucide-react";
@@ -26,7 +27,14 @@ import {
   CardTitle,
 } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
-
+import { Input } from "./ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { Separator } from "./ui/separator";
 import {
   Table,
@@ -48,6 +56,14 @@ interface FileExplorerProps {
 }
 
 type IndexingStatus = "indexed" | "not_indexed" | "indexing" | "unindexing";
+
+type SortOption = "name-asc" | "name-desc" | "date-asc" | "date-desc";
+
+interface SearchSortFilterState {
+  searchQuery: string;
+  sortBy: SortOption;
+  nameFilter: string;
+}
 
 // Define fixed column widths to prevent layout shifts
 const columnDefinitions = [
@@ -99,7 +115,8 @@ interface PaginatedFilesResponse {
 async function fetchConnectionFiles(
   connectionId: string,
   cursor?: string,
-  pageSize: number = 100
+  pageSize: number = 100,
+  searchQuery?: string
 ): Promise<PaginatedFilesResponse> {
   const url = new URL(
     `/api/connections/${connectionId}/files`,
@@ -109,6 +126,9 @@ async function fetchConnectionFiles(
     url.searchParams.append("cursor", cursor);
   }
   url.searchParams.append("page_size", pageSize.toString());
+  if (searchQuery) {
+    url.searchParams.append("search_query", searchQuery);
+  }
 
   const response = await fetch(url.toString());
   if (!response.ok) {
@@ -435,6 +455,26 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
   const [isOperationInProgress, setIsOperationInProgress] =
     useState<boolean>(false);
 
+  // Search, sort, and filter state
+  const [searchSortFilter, setSearchSortFilter] =
+    useState<SearchSortFilterState>({
+      searchQuery: "",
+      sortBy: "name-asc",
+      nameFilter: "",
+    });
+
+  // Debounced search query for API calls
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+
+  // Debounce search query
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchSortFilter.searchQuery);
+    }, 300); // 300ms debounce delay
+
+    return () => clearTimeout(timer);
+  }, [searchSortFilter.searchQuery]);
+
   const queryClient = useQueryClient();
 
   const {
@@ -442,12 +482,61 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["connection-files", selectedConnectionId, currentPage],
-    queryFn: () => fetchConnectionFiles(selectedConnectionId, cursor, pageSize),
+    queryKey: [
+      "connection-files",
+      selectedConnectionId,
+      currentPage,
+      debouncedSearchQuery,
+    ],
+    queryFn: () =>
+      fetchConnectionFiles(
+        selectedConnectionId,
+        cursor,
+        pageSize,
+        debouncedSearchQuery || undefined
+      ),
     enabled: !!selectedConnectionId,
   });
 
-  const files = paginatedData?.data || [];
+  const rawFiles = paginatedData?.data || [];
+
+  // Apply client-side sorting and filtering
+  const files = React.useMemo(() => {
+    let processedFiles = [...rawFiles];
+
+    // Apply name filter (client-side)
+    if (searchSortFilter.nameFilter) {
+      processedFiles = processedFiles.filter((file) => {
+        const fileName = file.inode_path?.path?.split("/").pop() || "";
+        return fileName
+          .toLowerCase()
+          .includes(searchSortFilter.nameFilter.toLowerCase());
+      });
+    }
+
+    // Apply sorting (client-side)
+    processedFiles.sort((a, b) => {
+      const aName = a.inode_path?.path?.split("/").pop() || "";
+      const bName = b.inode_path?.path?.split("/").pop() || "";
+      const aDate = a.modified_at || "";
+      const bDate = b.modified_at || "";
+
+      switch (searchSortFilter.sortBy) {
+        case "name-asc":
+          return aName.localeCompare(bName);
+        case "name-desc":
+          return bName.localeCompare(aName);
+        case "date-asc":
+          return aDate.localeCompare(bDate);
+        case "date-desc":
+          return bDate.localeCompare(aDate);
+        default:
+          return 0;
+      }
+    });
+
+    return processedFiles;
+  }, [rawFiles, searchSortFilter]);
 
   // Update pagination state when data changes
   useEffect(() => {
@@ -479,6 +568,13 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
 
     loadIndexingStatus();
   }, []);
+
+  // Reset pagination when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+    setCursor(undefined);
+    setSelectedFiles(new Set());
+  }, [debouncedSearchQuery, searchSortFilter.nameFilter]);
 
   // Pagination navigation functions
   const handleNextPage = () => {
@@ -1120,15 +1216,118 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                 </Link>
               </div>
             </div>
+
+            {/* Search, Sort, and Filter Controls */}
+            <div className="flex flex-col sm:flex-row gap-4 mt-4">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search files..."
+                  value={searchSortFilter.searchQuery}
+                  onChange={(e) =>
+                    setSearchSortFilter((prev) => ({
+                      ...prev,
+                      searchQuery: e.target.value,
+                    }))
+                  }
+                  className="pl-10"
+                  disabled={isOperationInProgress}
+                />
+                {searchSortFilter.searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setSearchSortFilter((prev) => ({
+                        ...prev,
+                        searchQuery: "",
+                      }))
+                    }
+                    className="absolute right-2 top-2 h-6 w-6 p-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Sort */}
+              <Select
+                value={searchSortFilter.sortBy}
+                onValueChange={(value: SortOption) =>
+                  setSearchSortFilter((prev) => ({ ...prev, sortBy: value }))
+                }
+                disabled={isOperationInProgress}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Sort by..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                  <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+                  <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+                  <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
 
           <CardContent>{renderFilesContent()}</CardContent>
         </Card>
 
+        {/* Show message when no results after filtering */}
+        {files.length === 0 &&
+          rawFiles.length > 0 &&
+          (searchSortFilter.nameFilter || debouncedSearchQuery) && (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No files match your current filters.</p>
+              <div className="flex justify-center space-x-2 mt-2">
+                {debouncedSearchQuery && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setSearchSortFilter((prev) => ({
+                        ...prev,
+                        searchQuery: "",
+                      }))
+                    }
+                  >
+                    Clear search
+                  </Button>
+                )}
+                {searchSortFilter.nameFilter && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setSearchSortFilter((prev) => ({
+                        ...prev,
+                        nameFilter: "",
+                      }))
+                    }
+                  >
+                    Clear filter
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
         {/* Pagination Controls */}
         {files.length > 0 && (
           <div className="mt-6 flex items-center justify-between">
             <div className="text-sm text-gray-700">
+              {debouncedSearchQuery && (
+                <span className="text-blue-600 mr-2">
+                  🔍 Search: &ldquo;{debouncedSearchQuery}&rdquo;
+                </span>
+              )}
+              {searchSortFilter.nameFilter && (
+                <span className="text-green-600 mr-2">
+                  🏷️ Filter: &ldquo;{searchSortFilter.nameFilter}&rdquo;
+                </span>
+              )}
               Page {currentPage} of {Math.ceil(totalFiles / pageSize)}
               {totalFiles > 0 && ` (${totalFiles} total files)`}
             </div>

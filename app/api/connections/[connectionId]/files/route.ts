@@ -23,20 +23,29 @@ export async function GET(
     const resourceId = searchParams.get("resource_id");
     const cursor = searchParams.get("cursor");
     const pageSize = parseInt(searchParams.get("page_size") || "100", 10);
+    const searchQuery = searchParams.get("search_query");
 
     // Create authenticated client
     const client = await createServerAuthenticatedClient(token);
 
-    // Fetch files for the connection (root files if no resource_id, folder contents if resource_id provided)
-    const filesResponse =
-      await client.connections.getChildrenResourcesConnectionsConnectionIdResourcesChildrenGet(
-        (
-          await params
-        ).connectionId,
-        resourceId || undefined, // use resource_id if provided, undefined for root files
-        cursor || undefined, // use cursor for pagination
-        pageSize // configurable page size
-      );
+    // Use search API if search query is provided, otherwise get children
+    const filesResponse = searchQuery
+      ? await client.connections.searchConnectionResourcesConnectionsConnectionIdResourcesSearchGet(
+          (
+            await params
+          ).connectionId,
+          searchQuery,
+          cursor || undefined,
+          pageSize
+        )
+      : await client.connections.getChildrenResourcesConnectionsConnectionIdResourcesChildrenGet(
+          (
+            await params
+          ).connectionId,
+          resourceId || undefined, // use resource_id if provided, undefined for root files
+          cursor || undefined, // use cursor for pagination
+          pageSize // configurable page size
+        );
 
     // Return pagination-aware response
     const data = filesResponse.data || [];
