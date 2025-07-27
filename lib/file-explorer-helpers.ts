@@ -74,6 +74,7 @@ export async function fetchFolderContents(
 }
 
 // Get all file/folder IDs recursively for a folder
+// NOTE: not using this anymore: turns out we don't want to reindex folder children
 export function getAllFileIds(
   files: (StackFile | StackDirectory)[],
   folderContents: Map<string, (StackFile | StackDirectory)[]>,

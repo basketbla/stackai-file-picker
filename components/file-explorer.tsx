@@ -27,7 +27,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
@@ -189,6 +189,11 @@ export default function FileExplorer() {
   const [isOperationInProgress, setIsOperationInProgress] =
     useState<boolean>(false);
 
+  // Indexing status loading state and data
+  const [isIndexingStatusLoading, setIsIndexingStatusLoading] =
+    useState<boolean>(false);
+  const [indexedFilePaths, setIndexedFilePaths] = useState<string[]>([]);
+
   // Search, sort, and filter state
   const [searchSortFilter, setSearchSortFilter] =
     useState<SearchSortFilterState>({
@@ -201,7 +206,7 @@ export default function FileExplorer() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
 
   // Debounce search query
-  React.useEffect(() => {
+  useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchSortFilter.searchQuery);
     }, 300); // 300ms debounce delay
@@ -211,7 +216,7 @@ export default function FileExplorer() {
 
   const {
     data: paginatedData,
-    isLoading,
+    isLoading: isFilesLoading,
     error,
   } = useQuery({
     queryKey: [
@@ -230,13 +235,16 @@ export default function FileExplorer() {
     enabled: !!selectedConnectionId,
   });
 
+  // Combined loading state - wait for both files and indexing status
+  const isLoading = isFilesLoading || isIndexingStatusLoading;
+
   const rawFiles = useMemo(
     () => paginatedData?.data || [],
     [paginatedData?.data]
   );
 
   // Apply client-side sorting and filtering
-  const files = React.useMemo(() => {
+  const files = useMemo(() => {
     let processedFiles = [...rawFiles];
 
     // Apply name filter (client-side)
@@ -281,37 +289,45 @@ export default function FileExplorer() {
     }
   }, [paginatedData]);
 
-  // Load initial indexing status
+  // Fetch indexing status immediately (in parallel with files)
   useEffect(() => {
     const loadIndexingStatus = async () => {
+      setIsIndexingStatusLoading(true);
       try {
-        const indexedFilePaths = await fetchIndexingStatus(
+        const paths = await fetchIndexingStatus(
           USER_SETTINGS.knowledge_base_id
         );
-        const statusMap = new Map<string, IndexingStatus>();
-
-        // Check each file in the current view against indexed paths
-        files.forEach((file) => {
-          if (file.resource_id) {
-            const filePath = file.inode_path?.path;
-            if (filePath && indexedFilePaths.includes(filePath)) {
-              statusMap.set(file.resource_id, "indexed");
-            } else {
-              statusMap.set(file.resource_id, "not_indexed");
-            }
-          }
-        });
-
-        setFileIndexingStatus(statusMap);
+        setIndexedFilePaths(paths);
       } catch (error) {
         console.error("Failed to load indexing status:", error);
+      } finally {
+        setIsIndexingStatusLoading(false);
       }
     };
 
-    if (files.length > 0) {
-      loadIndexingStatus();
-    }
-  }, [files]); // Re-run when files change
+    loadIndexingStatus();
+  }, []);
+
+  // Update file statuses when either files or indexing status changes
+  useEffect(() => {
+    if (files.length === 0) return;
+
+    const statusMap = new Map<string, IndexingStatus>();
+
+    // Check each file in the current view against indexed paths
+    files.forEach((file) => {
+      if (file.resource_id) {
+        const filePath = file.inode_path?.path;
+        if (filePath && indexedFilePaths.includes(filePath)) {
+          statusMap.set(file.resource_id, "indexed");
+        } else {
+          statusMap.set(file.resource_id, "not_indexed");
+        }
+      }
+    });
+
+    setFileIndexingStatus(statusMap);
+  }, [files, indexedFilePaths]);
 
   // Reset pagination when search/filter changes
   useEffect(() => {
@@ -354,16 +370,7 @@ export default function FileExplorer() {
       console.log("Fetching all folder contents for indexing...");
 
       // Get all files including recursive folder contents
-      const allFilesToIndex = await getAllFolderContentsForIndexing(
-        selectedFileIds,
-        files,
-        folderContents,
-        selectedConnectionId
-      );
-
-      console.log(
-        `Found ${allFilesToIndex.length} total files to index (including folder contents)`
-      );
+      const allFilesToIndex = selectedFileIds;
 
       // Make actual API call to index all files
       await indexFiles(allFilesToIndex);
