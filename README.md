@@ -134,7 +134,7 @@ Test credentials: provided in notion doc.
 
 ## Live Demo
 
-The application is deployed on Vercel: [https://stackai-demo.rhett.info/](https://stackai-demo.rhett.info/)
+The application is deployed on Vercel: [https://stackai-file-picker-phi.vercel.app](https://stackai-file-picker-phi.vercel.app)
 
 ## 📋 Project Structure
 
