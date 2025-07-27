@@ -49,6 +49,35 @@ interface FileExplorerProps {
 
 type IndexingStatus = "indexed" | "not_indexed" | "indexing" | "unindexing";
 
+// Define fixed column widths to prevent layout shifts
+const columnDefinitions = [
+  {
+    key: "checkbox",
+    header: "Select",
+    size: 40, // w-6 equivalent
+  },
+  {
+    key: "name",
+    header: "Name",
+    size: 400, // Flexible main column
+  },
+  {
+    key: "size",
+    header: "Size",
+    size: 100, // w-24 equivalent
+  },
+  {
+    key: "modified",
+    header: "Modified",
+    size: 140, // w-32 equivalent
+  },
+  {
+    key: "indexed",
+    header: "Indexed",
+    size: 120, // w-24 equivalent but wider for status badges
+  },
+];
+
 function LogoutButton() {
   const handleLogout = () => {
     logoutAndRedirect();
@@ -705,7 +734,13 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-6">
+            <TableHead
+              style={{
+                minWidth: columnDefinitions[0].size,
+                maxWidth: columnDefinitions[0].size,
+                width: columnDefinitions[0].size,
+              }}
+            >
               <Checkbox
                 checked={
                   selectedFiles.size === getFlattenedFiles().length &&
@@ -727,10 +762,42 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                 }}
               />
             </TableHead>
-            <TableHead className="w-1/2">Name</TableHead>
-            <TableHead className="w-24 shrink-0">Size</TableHead>
-            <TableHead className="w-32">Modified</TableHead>
-            <TableHead className="w-24">Indexed</TableHead>
+            <TableHead
+              style={{
+                minWidth: columnDefinitions[1].size,
+                maxWidth: columnDefinitions[1].size,
+                width: columnDefinitions[1].size,
+              }}
+            >
+              Name
+            </TableHead>
+            <TableHead
+              style={{
+                minWidth: columnDefinitions[2].size,
+                maxWidth: columnDefinitions[2].size,
+                width: columnDefinitions[2].size,
+              }}
+            >
+              Size
+            </TableHead>
+            <TableHead
+              style={{
+                minWidth: columnDefinitions[3].size,
+                maxWidth: columnDefinitions[3].size,
+                width: columnDefinitions[3].size,
+              }}
+            >
+              Modified
+            </TableHead>
+            <TableHead
+              style={{
+                minWidth: columnDefinitions[4].size,
+                maxWidth: columnDefinitions[4].size,
+                width: columnDefinitions[4].size,
+              }}
+            >
+              Indexed
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -741,22 +808,54 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                 key={`skeleton-${i}`}
                 className="animate-pulse h-[39px]"
               >
-                <TableCell className="w-6 pr-0">
+                <TableCell
+                  className="pr-0"
+                  style={{
+                    minWidth: columnDefinitions[0].size,
+                    maxWidth: columnDefinitions[0].size,
+                    width: columnDefinitions[0].size,
+                  }}
+                >
                   <div className="h-4 w-4 bg-gray-200 rounded"></div>
                 </TableCell>
-                <TableCell className="w-1/2 flex items-center h-[39px]">
+                <TableCell
+                  className="flex items-center h-[39px]"
+                  style={{
+                    minWidth: columnDefinitions[1].size,
+                    maxWidth: columnDefinitions[1].size,
+                    width: columnDefinitions[1].size,
+                  }}
+                >
                   <div className="flex items-center space-x-2">
                     <div className="h-4 w-4 bg-gray-200 rounded"></div>
                     <div className="h-4 w-24 bg-gray-200 rounded"></div>
                   </div>
                 </TableCell>
-                <TableCell className="w-24">
+                <TableCell
+                  style={{
+                    minWidth: columnDefinitions[2].size,
+                    maxWidth: columnDefinitions[2].size,
+                    width: columnDefinitions[2].size,
+                  }}
+                >
                   <div className="h-4 w-12 bg-gray-200 rounded"></div>
                 </TableCell>
-                <TableCell className="w-32">
+                <TableCell
+                  style={{
+                    minWidth: columnDefinitions[3].size,
+                    maxWidth: columnDefinitions[3].size,
+                    width: columnDefinitions[3].size,
+                  }}
+                >
                   <div className="h-4 w-20 bg-gray-200 rounded"></div>
                 </TableCell>
-                <TableCell className="w-24">
+                <TableCell
+                  style={{
+                    minWidth: columnDefinitions[4].size,
+                    maxWidth: columnDefinitions[4].size,
+                    width: columnDefinitions[4].size,
+                  }}
+                >
                   <div className="h-4 w-16 bg-gray-200 rounded"></div>
                 </TableCell>
               </TableRow>
@@ -766,6 +865,16 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
               <TableCell
                 colSpan={5}
                 className="text-center py-8 text-muted-foreground"
+                style={{
+                  minWidth: columnDefinitions.reduce(
+                    (sum, col) => sum + col.size,
+                    0
+                  ),
+                  width: columnDefinitions.reduce(
+                    (sum, col) => sum + col.size,
+                    0
+                  ),
+                }}
               >
                 <p>No files found in this connection.</p>
                 <p className="text-sm">
@@ -785,10 +894,24 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
               if (isLoading) {
                 return (
                   <TableRow key={fileId} className="animate-pulse h-[39px]">
-                    <TableCell className="w-6 pr-0">
+                    <TableCell
+                      className="pr-0"
+                      style={{
+                        minWidth: columnDefinitions[0].size,
+                        maxWidth: columnDefinitions[0].size,
+                        width: columnDefinitions[0].size,
+                      }}
+                    >
                       <div className="h-4 w-4 bg-gray-200 rounded"></div>
                     </TableCell>
-                    <TableCell className="w-1/2 flex items-center h-[39px]">
+                    <TableCell
+                      className="flex items-center h-[39px]"
+                      style={{
+                        minWidth: columnDefinitions[1].size,
+                        maxWidth: columnDefinitions[1].size,
+                        width: columnDefinitions[1].size,
+                      }}
+                    >
                       <div
                         style={{ marginLeft: `${depth * 20}px` }}
                         className="flex items-center space-x-2"
@@ -797,13 +920,31 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                         <div className="h-4 w-24 bg-gray-200 rounded"></div>
                       </div>
                     </TableCell>
-                    <TableCell className="w-24">
+                    <TableCell
+                      style={{
+                        minWidth: columnDefinitions[2].size,
+                        maxWidth: columnDefinitions[2].size,
+                        width: columnDefinitions[2].size,
+                      }}
+                    >
                       <div className="h-4 w-12 bg-gray-200 rounded"></div>
                     </TableCell>
-                    <TableCell className="w-32">
+                    <TableCell
+                      style={{
+                        minWidth: columnDefinitions[3].size,
+                        maxWidth: columnDefinitions[3].size,
+                        width: columnDefinitions[3].size,
+                      }}
+                    >
                       <div className="h-4 w-20 bg-gray-200 rounded"></div>
                     </TableCell>
-                    <TableCell className="w-24">
+                    <TableCell
+                      style={{
+                        minWidth: columnDefinitions[4].size,
+                        maxWidth: columnDefinitions[4].size,
+                        width: columnDefinitions[4].size,
+                      }}
+                    >
                       <div className="h-4 w-16 bg-gray-200 rounded"></div>
                     </TableCell>
                   </TableRow>
@@ -812,7 +953,13 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
 
               return (
                 <TableRow key={fileId}>
-                  <TableCell className="w-6">
+                  <TableCell
+                    style={{
+                      minWidth: columnDefinitions[0].size,
+                      maxWidth: columnDefinitions[0].size,
+                      width: columnDefinitions[0].size,
+                    }}
+                  >
                     <Checkbox
                       checked={isSelected}
                       disabled={isOperationInProgress}
@@ -867,7 +1014,14 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                       }}
                     />
                   </TableCell>
-                  <TableCell className="w-1/2 flex items-center space-x-2">
+                  <TableCell
+                    className="flex items-center space-x-2"
+                    style={{
+                      minWidth: columnDefinitions[1].size,
+                      maxWidth: columnDefinitions[1].size,
+                      width: columnDefinitions[1].size,
+                    }}
+                  >
                     <div
                       style={{ marginLeft: `${depth * 20}px` }}
                       className="flex items-center space-x-2"
@@ -889,15 +1043,33 @@ export default function FileExplorer({ initialData }: FileExplorerProps) {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="w-24">
+                  <TableCell
+                    style={{
+                      minWidth: columnDefinitions[2].size,
+                      maxWidth: columnDefinitions[2].size,
+                      width: columnDefinitions[2].size,
+                    }}
+                  >
                     {file.inode_type === "directory"
                       ? "-"
                       : formatFileSize((file as StackFile).size || 0)}
                   </TableCell>
-                  <TableCell className="w-32">
+                  <TableCell
+                    style={{
+                      minWidth: columnDefinitions[3].size,
+                      maxWidth: columnDefinitions[3].size,
+                      width: columnDefinitions[3].size,
+                    }}
+                  >
                     {file.modified_at ? formatDate(file.modified_at) : "-"}
                   </TableCell>
-                  <TableCell className="w-24">
+                  <TableCell
+                    style={{
+                      minWidth: columnDefinitions[4].size,
+                      maxWidth: columnDefinitions[4].size,
+                      width: columnDefinitions[4].size,
+                    }}
+                  >
                     {renderIndexingStatus(
                       indexingStatus,
                       file.indexed_at ?? undefined
