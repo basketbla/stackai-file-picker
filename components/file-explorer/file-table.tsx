@@ -52,7 +52,7 @@ const columnDefinitions = [
 interface FileTableProps {
   files: (StackFile | StackDirectory)[];
   isLoading: boolean;
-  error: any;
+  error: unknown;
   selectedFiles: Set<string>;
   filesWithSelectedParent: Set<string>;
   fileIndexingStatus: Map<string, IndexingStatus>;
