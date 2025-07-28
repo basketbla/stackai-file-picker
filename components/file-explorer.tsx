@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  useDebounced,
+  useFileStatusUpdate,
+  useFilesWithSelectedParent,
+  useIndexingStatus,
+  usePaginationReset,
+  usePaginationUpdate,
+} from "@/hooks/file-explorer-hooks";
 import { logoutAndRedirect } from "@/lib/auth";
 import { USER_SETTINGS } from "@/lib/constants";
 import {
@@ -26,7 +34,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
@@ -207,16 +215,7 @@ export default function FileExplorer() {
     });
 
   // Debounced search query for API calls
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-
-  // Debounce search query
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchSortFilter.searchQuery);
-    }, 300); // 300ms debounce delay
-
-    return () => clearTimeout(timer);
-  }, [searchSortFilter.searchQuery]);
+  const debouncedSearchQuery = useDebounced(searchSortFilter);
 
   const {
     data: paginatedData,
@@ -286,141 +285,31 @@ export default function FileExplorer() {
   }, [rawFiles, searchSortFilter]);
 
   // Update pagination state when data changes
-  useEffect(() => {
-    if (paginatedData) {
-      setTotalFiles(paginatedData.total);
-      setHasMore(paginatedData.hasMore);
-    }
-  }, [paginatedData]);
+  usePaginationUpdate(paginatedData, setTotalFiles, setHasMore);
 
   // Fetch indexing status immediately (in parallel with files)
-  useEffect(() => {
-    const loadIndexingStatus = async () => {
-      setIsIndexingStatusLoading(true);
-      try {
-        const paths = await fetchIndexingStatus(
-          USER_SETTINGS.knowledge_base_id
-        );
-        setIndexedFilePaths(paths);
-      } catch (error) {
-        console.error("Failed to load indexing status:", error);
-      } finally {
-        setIsIndexingStatusLoading(false);
-      }
-    };
-
-    loadIndexingStatus();
-  }, []);
+  useIndexingStatus(setIsIndexingStatusLoading, setIndexedFilePaths);
 
   // Update file statuses when either files or indexing status changes
-  useEffect(() => {
-    if (files.length === 0) return;
-
-    const statusMap = new Map<string, IndexingStatus>();
-
-    // Check each file in the current view against indexed paths
-    files.forEach((file) => {
-      if (file.resource_id) {
-        const filePath = file.inode_path?.path;
-        if (filePath && indexedFilePaths.includes(filePath)) {
-          statusMap.set(file.resource_id, "indexed");
-        } else {
-          statusMap.set(file.resource_id, "not_indexed");
-        }
-      }
-    });
-
-    setFileIndexingStatus(statusMap);
-  }, [files, indexedFilePaths]);
+  useFileStatusUpdate(files, indexedFilePaths, setFileIndexingStatus);
 
   // Update files with selected parent when selections or file structure changes
-  useEffect(() => {
-    const computeFilesWithSelectedParent = () => {
-      const newFilesWithSelectedParent = new Set<string>();
-
-      // First, get all selected file paths and IDs for directories
-      const selectedFolderPaths = new Set<string>();
-
-      // Helper to find file by ID in all visible files
-      const findFileById = (
-        targetId: string,
-        fileList: (StackFile | StackDirectory)[] = files
-      ): StackFile | StackDirectory | null => {
-        for (const file of fileList) {
-          if (file.resource_id === targetId) return file;
-          // Also check in folder contents
-          if (file.inode_type === "directory") {
-            const children = folderContents.get(file.resource_id || "");
-            if (children) {
-              const found = findFileById(targetId, children);
-              if (found) return found;
-            }
-          }
-        }
-        return null;
-      };
-
-      // Collect paths of selected folders
-      selectedFiles.forEach((selectedId) => {
-        const selectedFile = findFileById(selectedId);
-        if (
-          selectedFile?.inode_type === "directory" &&
-          selectedFile.inode_path?.path
-        ) {
-          selectedFolderPaths.add(selectedFile.inode_path.path);
-        }
-      });
-
-      // Helper to check if a file path has any selected parent
-      const hasSelectedParent = (filePath: string): boolean => {
-        if (!filePath) return false;
-
-        // Check if any selected folder path is a parent of this file
-        for (const selectedFolderPath of selectedFolderPaths) {
-          if (filePath.startsWith(selectedFolderPath + "/")) {
-            return true;
-          }
-        }
-        return false;
-      };
-
-      // Check all visible files (including in expanded folders)
-      const checkFiles = (fileList: (StackFile | StackDirectory)[]) => {
-        fileList.forEach((file) => {
-          if (file.resource_id && file.inode_path?.path) {
-            if (hasSelectedParent(file.inode_path.path)) {
-              newFilesWithSelectedParent.add(file.resource_id);
-            }
-          }
-
-          // Also check expanded folder contents
-          if (
-            file.inode_type === "directory" &&
-            file.resource_id &&
-            expandedFolders.has(file.resource_id)
-          ) {
-            const children = folderContents.get(file.resource_id);
-            if (children) {
-              checkFiles(children);
-            }
-          }
-        });
-      };
-
-      checkFiles(files);
-
-      setFilesWithSelectedParent(newFilesWithSelectedParent);
-    };
-
-    computeFilesWithSelectedParent();
-  }, [selectedFiles, files, folderContents, expandedFolders]);
+  useFilesWithSelectedParent(
+    selectedFiles,
+    files,
+    folderContents,
+    expandedFolders,
+    setFilesWithSelectedParent
+  );
 
   // Reset pagination when search/filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-    setCursor(undefined);
-    setSelectedFiles(new Set());
-  }, [debouncedSearchQuery, searchSortFilter.nameFilter]);
+  usePaginationReset(
+    debouncedSearchQuery,
+    searchSortFilter.nameFilter,
+    setCurrentPage,
+    setCursor,
+    setSelectedFiles
+  );
 
   // Pagination navigation functions
   const handleNextPage = () => {
@@ -517,12 +406,9 @@ export default function FileExplorer() {
 
       setSelectedFiles(new Set());
     } catch (error) {
-      // Reset status on error for selected files and their children
       updateChildrenIndexingStatus(selectedFileIds, "not_indexed");
       console.error("Failed to index files:", error);
-      // You could show a toast notification here
     } finally {
-      // Clear operation in progress
       setIsOperationInProgress(false);
     }
   };
@@ -554,11 +440,9 @@ export default function FileExplorer() {
       setSelectedFiles(new Set());
     } catch (error) {
       // Reset status on error for selected files and their children
-      updateChildrenIndexingStatus(selectedFileIds, "indexed"); // Reset to indexed on error
+      updateChildrenIndexingStatus(selectedFileIds, "indexed");
       console.error("Failed to unindex files:", error);
-      // You could show a toast notification here
     } finally {
-      // Clear operation in progress
       setIsOperationInProgress(false);
     }
   };
