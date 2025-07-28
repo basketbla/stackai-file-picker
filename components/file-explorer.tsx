@@ -9,7 +9,7 @@ import {
   formatDate,
   formatFileSize,
   getAllFileIds,
-  getAllFolderContentsForIndexing,
+  getAllFilePathsForUnindexing,
   indexFiles,
   unindexFiles,
 } from "@/lib/file-explorer-helpers";
@@ -413,8 +413,8 @@ export default function FileExplorer() {
     try {
       console.log("Fetching all folder contents for unindexing...");
 
-      // Get all files including recursive folder contents
-      const allFilesToUnindex = await getAllFolderContentsForIndexing(
+      // Get all file paths including recursive folder contents
+      const allFilePathsToUnindex = await getAllFilePathsForUnindexing(
         selectedFileIds,
         files,
         folderContents,
@@ -422,15 +422,15 @@ export default function FileExplorer() {
       );
 
       console.log(
-        `Found ${allFilesToUnindex.length} total files to unindex (including folder contents)`
+        `Found ${allFilePathsToUnindex.length} total files to unindex (including folder contents)`
       );
 
       // Make actual API call to unindex all files
-      await unindexFiles(allFilesToUnindex);
+      await unindexFiles(allFilePathsToUnindex);
 
-      // Update status to not_indexed on success for all files
+      // Update status to not_indexed on success for all selected files
       const newStatus = new Map(fileIndexingStatus);
-      allFilesToUnindex.forEach((fileId) => {
+      selectedFileIds.forEach((fileId) => {
         newStatus.set(fileId, "not_indexed");
       });
       setFileIndexingStatus(newStatus);

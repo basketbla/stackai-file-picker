@@ -2,7 +2,7 @@ import {
   createServerAuthenticatedClient,
   getTokenFromCookies,
 } from "@/lib/auth";
-import { ApiError, IndexingParams_Input } from "@/stack-api-autogen";
+import { ApiError } from "@/stack-api-autogen";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -16,11 +16,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const { fileIds, knowledgeBaseId } = await request.json();
+    const { filePaths, knowledgeBaseId } = await request.json();
 
-    if (!fileIds || !Array.isArray(fileIds) || !knowledgeBaseId) {
+    if (!filePaths || !Array.isArray(filePaths) || !knowledgeBaseId) {
       return NextResponse.json(
-        { error: "fileIds and knowledgeBaseId are required" },
+        { error: "filePaths and knowledgeBaseId are required" },
         { status: 400 }
       );
     }
@@ -28,36 +28,16 @@ export async function POST(request: NextRequest) {
     // Create authenticated client
     const client = await createServerAuthenticatedClient(token);
 
-    // Get current knowledge base data
-    const kbData =
-      await client.knowledgeBases.getKnowledgeBaseByIdKnowledgeBasesKnowledgeBaseIdGet(
-        knowledgeBaseId
-      );
-
-    // Remove file IDs from existing connection_source_ids
-    const currentSourceIds = new Set(kbData.connection_source_ids || []);
-    fileIds.forEach((id: string) => currentSourceIds.delete(id));
-
-    // Update the knowledge base with removed source IDs
-    await client.knowledgeBases.updateKnowledgeBaseKnowledgeBasesKnowledgeBaseIdPut(
-      knowledgeBaseId,
-      {
-        connection_id: kbData.connection_id,
-        connection_source_ids: Array.from(currentSourceIds),
-        website_sources: kbData.website_sources || [],
-        name: kbData.name,
-        description: kbData.description,
-        indexing_params: kbData.indexing_params as IndexingParams_Input,
-        org_level_role: kbData.org_level_role,
-        cron_job_id: kbData.cron_job_id,
-      }
+    // Delete each file resource using the correct DELETE endpoint
+    const deletePromises = filePaths.map((resourcePath: string) =>
+      client.knowledgeBases.deleteResourceKnowledgeBasesKnowledgeBaseIdResourcesDelete(
+        knowledgeBaseId,
+        resourcePath
+      )
     );
 
-    // Trigger sync in background
-    client.knowledgeBases.synchronizeKnowledgeBaseKnowledgeBasesSyncTriggerKnowledgeBaseIdOrgIdGet(
-      kbData.org_id,
-      knowledgeBaseId
-    );
+    // Wait for all deletes to complete
+    await Promise.all(deletePromises);
 
     return NextResponse.json({ success: true });
   } catch (error) {

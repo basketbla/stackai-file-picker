@@ -198,6 +198,89 @@ export async function getAllFolderContentsForIndexing(
   return Array.from(allFileIds);
 }
 
+// Get all file paths recursively for unindexing
+export async function getAllFilePathsForUnindexing(
+  selectedFileIds: string[],
+  files: (StackFile | StackDirectory)[],
+  folderContents: Map<string, (StackFile | StackDirectory)[]>,
+  connectionId: string
+): Promise<string[]> {
+  const allFilePaths = new Set<string>();
+
+  const fetchFolderRecursively = async (folderId: string) => {
+    // Check if we already have the contents in cache
+    let contents = folderContents.get(folderId);
+
+    // If not in cache, fetch from API
+    if (!contents) {
+      try {
+        contents = await fetchFolderContents(connectionId, folderId);
+      } catch (error) {
+        console.error(
+          `Failed to fetch contents for folder ${folderId}:`,
+          error
+        );
+        return;
+      }
+    }
+
+    // Process all items in this folder
+    for (const item of contents) {
+      const filePath = item.inode_path?.path;
+      if (filePath) {
+        allFilePaths.add(filePath);
+
+        // If it's a subfolder, recursively fetch its contents
+        if (item.inode_type === "directory") {
+          await fetchFolderRecursively(item.resource_id || "");
+        }
+      }
+    }
+  };
+
+  // Find selected folders and files
+  const selectedFolders: string[] = [];
+
+  for (const fileId of selectedFileIds) {
+    // Find the file object to check if it's a folder
+    const findFileInList = (
+      list: (StackFile | StackDirectory)[]
+    ): StackFile | StackDirectory | null => {
+      for (const file of list) {
+        if (file.resource_id === fileId) return file;
+        // Also check in folder contents
+        if (file.inode_type === "directory") {
+          const children = folderContents.get(file.resource_id || "");
+          if (children) {
+            const found = findFileInList(children);
+            if (found) return found;
+          }
+        }
+      }
+      return null;
+    };
+
+    const fileObj = findFileInList(files);
+    if (fileObj) {
+      const filePath = fileObj.inode_path?.path;
+      if (filePath) {
+        allFilePaths.add(filePath);
+
+        if (fileObj.inode_type === "directory") {
+          selectedFolders.push(fileId);
+        }
+      }
+    }
+  }
+
+  // Recursively fetch all folder contents
+  for (const folderId of selectedFolders) {
+    await fetchFolderRecursively(folderId);
+  }
+
+  return Array.from(allFilePaths);
+}
+
 // API functions for indexing operations
 export async function indexFiles(fileIds: string[]): Promise<void> {
   const response = await fetch("/api/knowledge-base/index", {
@@ -220,14 +303,14 @@ export async function indexFiles(fileIds: string[]): Promise<void> {
   }
 }
 
-export async function unindexFiles(fileIds: string[]): Promise<void> {
+export async function unindexFiles(filePaths: string[]): Promise<void> {
   const response = await fetch("/api/knowledge-base/unindex", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      fileIds,
+      filePaths,
       knowledgeBaseId: USER_SETTINGS.knowledge_base_id,
     }),
   });
