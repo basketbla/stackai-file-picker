@@ -371,8 +371,6 @@ export default function FileExplorer() {
         }
       });
 
-      console.log("🗂️ Selected folder paths:", Array.from(selectedFolderPaths));
-
       // Helper to check if a file path has any selected parent
       const hasSelectedParent = (filePath: string): boolean => {
         if (!filePath) return false;
@@ -411,10 +409,6 @@ export default function FileExplorer() {
 
       checkFiles(files);
 
-      console.log(
-        "🎯 Files with selected parent:",
-        Array.from(newFilesWithSelectedParent)
-      );
       setFilesWithSelectedParent(newFilesWithSelectedParent);
     };
 
@@ -445,75 +439,61 @@ export default function FileExplorer() {
     }
   };
 
-  // Helper function to invalidate folder cache for affected folders
-  const invalidateFolderCaches = (affectedFileIds: string[]) => {
-    setFolderContents((prevContents) => {
-      const newContents = new Map(prevContents);
+  // Helper function to update children indexing status without closing folders
+  const updateChildrenIndexingStatus = (
+    affectedFileIds: string[],
+    newStatus: IndexingStatus
+  ) => {
+    setFileIndexingStatus((prevStatus) => {
+      const updatedStatus = new Map(prevStatus);
 
-      // Check each cached folder to see if it contains any affected files
-      prevContents.forEach((contents, folderId) => {
-        const hasAffectedChild = contents.some(
-          (child) =>
-            child.resource_id && affectedFileIds.includes(child.resource_id)
-        );
+      // Update status for all affected files
+      affectedFileIds.forEach((fileId) => {
+        updatedStatus.set(fileId, newStatus);
+      });
 
-        if (hasAffectedChild) {
-          // Remove this folder's cache so it will be refetched with updated status
-          newContents.delete(folderId);
+      // Also update status for all visible children in expanded folders
+      folderContents.forEach((contents, folderId) => {
+        // Check if this folder or any of its ancestors is affected
+        const folderIsAffected = affectedFileIds.includes(folderId);
+
+        if (folderIsAffected) {
+          // Update status for all children in this folder
+          contents.forEach((child) => {
+            if (child.resource_id) {
+              updatedStatus.set(child.resource_id, newStatus);
+
+              // If child is also a folder with children, update recursively
+              if (child.inode_type === "directory") {
+                const grandChildren = folderContents.get(child.resource_id);
+                if (grandChildren) {
+                  const updateRecursively = (
+                    items: (StackFile | StackDirectory)[]
+                  ) => {
+                    items.forEach((item) => {
+                      if (item.resource_id) {
+                        updatedStatus.set(item.resource_id, newStatus);
+                        if (item.inode_type === "directory") {
+                          const subChildren = folderContents.get(
+                            item.resource_id
+                          );
+                          if (subChildren) {
+                            updateRecursively(subChildren);
+                          }
+                        }
+                      }
+                    });
+                  };
+                  updateRecursively(grandChildren);
+                }
+              }
+            }
+          });
         }
       });
 
-      return newContents;
+      return updatedStatus;
     });
-  };
-
-  // Helper function to get all child file IDs from selected folders
-  const getAllChildFileIds = async (
-    selectedFileIds: string[]
-  ): Promise<string[]> => {
-    const allChildIds = new Set<string>();
-
-    for (const fileId of selectedFileIds) {
-      // Find the file object to check if it's a folder
-      const findFileInList = (
-        list: (StackFile | StackDirectory)[]
-      ): StackFile | StackDirectory | null => {
-        for (const file of list) {
-          if (file.resource_id === fileId) return file;
-          // Also check in folder contents
-          if (file.inode_type === "directory") {
-            const children = folderContents.get(file.resource_id || "");
-            if (children) {
-              const found = findFileInList(children);
-              if (found) return found;
-            }
-          }
-        }
-        return null;
-      };
-
-      const fileObj = findFileInList(files);
-      if (fileObj?.inode_type === "directory") {
-        // Get all children recursively from cache
-        const getChildrenRecursively = (folderId: string) => {
-          const children = folderContents.get(folderId);
-          if (children) {
-            children.forEach((child) => {
-              if (child.resource_id) {
-                allChildIds.add(child.resource_id);
-                if (child.inode_type === "directory") {
-                  getChildrenRecursively(child.resource_id);
-                }
-              }
-            });
-          }
-        };
-
-        getChildrenRecursively(fileId);
-      }
-    }
-
-    return Array.from(allChildIds);
   };
 
   const handleIndexFiles = async () => {
@@ -522,48 +502,23 @@ export default function FileExplorer() {
     // Set operation in progress
     setIsOperationInProgress(true);
 
-    // Set selected files to indexing state
-    const newStatus = new Map(fileIndexingStatus);
-    selectedFileIds.forEach((fileId) => {
-      newStatus.set(fileId, "indexing");
-    });
-    setFileIndexingStatus(newStatus);
+    // Set selected files and their children to indexing state
+    updateChildrenIndexingStatus(selectedFileIds, "indexing");
 
     try {
-      console.log("Fetching all folder contents for indexing...");
-
       // Get all files including recursive folder contents
       const allFilesToIndex = selectedFileIds;
 
       // Make actual API call to index all files
       await indexFiles(allFilesToIndex);
 
-      // Update status to indexed on success for all files
-      const updatedStatus = new Map(fileIndexingStatus);
-      allFilesToIndex.forEach((fileId) => {
-        updatedStatus.set(fileId, "indexed");
-      });
-      setFileIndexingStatus(updatedStatus);
-
-      // Get all child file IDs that may be affected
-      const childFileIds = await getAllChildFileIds(selectedFileIds);
-
-      // Update status for child files too (they inherit parent's indexed status)
-      childFileIds.forEach((childId) => {
-        updatedStatus.set(childId, "indexed");
-      });
-
-      // Invalidate folder caches that contain indexed folders or their children
-      invalidateFolderCaches([...selectedFileIds, ...childFileIds]);
+      // Update status to indexed on success for all files and their children
+      updateChildrenIndexingStatus(selectedFileIds, "indexed");
 
       setSelectedFiles(new Set());
     } catch (error) {
-      // Reset status on error for selected files
-      const resetStatus = new Map(fileIndexingStatus);
-      selectedFileIds.forEach((fileId) => {
-        resetStatus.set(fileId, "not_indexed");
-      });
-      setFileIndexingStatus(resetStatus);
+      // Reset status on error for selected files and their children
+      updateChildrenIndexingStatus(selectedFileIds, "not_indexed");
       console.error("Failed to index files:", error);
       // You could show a toast notification here
     } finally {
@@ -578,16 +533,10 @@ export default function FileExplorer() {
     // Set operation in progress
     setIsOperationInProgress(true);
 
-    // Set selected files to unindexing state
-    const unindexingStatus = new Map(fileIndexingStatus);
-    selectedFileIds.forEach((fileId) => {
-      unindexingStatus.set(fileId, "unindexing");
-    });
-    setFileIndexingStatus(unindexingStatus);
+    // Set selected files and their children to unindexing state
+    updateChildrenIndexingStatus(selectedFileIds, "unindexing");
 
     try {
-      console.log("Fetching all folder contents for unindexing...");
-
       // Get all file paths including recursive folder contents
       const allFilePathsToUnindex = await getAllFilePathsForUnindexing(
         selectedFileIds,
@@ -596,40 +545,16 @@ export default function FileExplorer() {
         selectedConnectionId
       );
 
-      console.log(
-        `Found ${allFilePathsToUnindex.length} total files to unindex (including folder contents)`
-      );
-
       // Make actual API call to unindex all files
       await unindexFiles(allFilePathsToUnindex);
 
-      // Update status to not_indexed on success for all selected files
-      const newStatus = new Map(fileIndexingStatus);
-      selectedFileIds.forEach((fileId) => {
-        newStatus.set(fileId, "not_indexed");
-      });
-
-      // Get all child file IDs that may be affected
-      const childFileIds = await getAllChildFileIds(selectedFileIds);
-
-      // Update status for child files too (they inherit parent's unindexed status)
-      childFileIds.forEach((childId) => {
-        newStatus.set(childId, "not_indexed");
-      });
-
-      setFileIndexingStatus(newStatus);
-
-      // Invalidate folder caches that contain unindexed folders or their children
-      invalidateFolderCaches([...selectedFileIds, ...childFileIds]);
+      // Update status to not_indexed on success for all files and their children
+      updateChildrenIndexingStatus(selectedFileIds, "not_indexed");
 
       setSelectedFiles(new Set());
     } catch (error) {
-      // Reset status on error for selected files
-      const resetStatus = new Map(fileIndexingStatus);
-      selectedFileIds.forEach((fileId) => {
-        resetStatus.set(fileId, "indexed"); // Reset to indexed on error
-      });
-      setFileIndexingStatus(resetStatus);
+      // Reset status on error for selected files and their children
+      updateChildrenIndexingStatus(selectedFileIds, "indexed"); // Reset to indexed on error
       console.error("Failed to unindex files:", error);
       // You could show a toast notification here
     } finally {
