@@ -8,7 +8,6 @@ import {
   fetchIndexingStatus,
   formatDate,
   formatFileSize,
-  getAllFileIds,
   getAllFilePathsForUnindexing,
   indexFiles,
   unindexFiles,
@@ -178,6 +177,11 @@ export default function FileExplorer() {
     Map<string, (StackFile | StackDirectory)[]>
   >(new Map());
 
+  // Track files that have a selected parent (for performance)
+  const [filesWithSelectedParent, setFilesWithSelectedParent] = useState<
+    Set<string>
+  >(new Set());
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
@@ -328,6 +332,94 @@ export default function FileExplorer() {
 
     setFileIndexingStatus(statusMap);
   }, [files, indexedFilePaths]);
+
+  // Update files with selected parent when selections or file structure changes
+  useEffect(() => {
+    const computeFilesWithSelectedParent = () => {
+      const newFilesWithSelectedParent = new Set<string>();
+
+      // First, get all selected file paths and IDs for directories
+      const selectedFolderPaths = new Set<string>();
+
+      // Helper to find file by ID in all visible files
+      const findFileById = (
+        targetId: string,
+        fileList: (StackFile | StackDirectory)[] = files
+      ): StackFile | StackDirectory | null => {
+        for (const file of fileList) {
+          if (file.resource_id === targetId) return file;
+          // Also check in folder contents
+          if (file.inode_type === "directory") {
+            const children = folderContents.get(file.resource_id || "");
+            if (children) {
+              const found = findFileById(targetId, children);
+              if (found) return found;
+            }
+          }
+        }
+        return null;
+      };
+
+      // Collect paths of selected folders
+      selectedFiles.forEach((selectedId) => {
+        const selectedFile = findFileById(selectedId);
+        if (
+          selectedFile?.inode_type === "directory" &&
+          selectedFile.inode_path?.path
+        ) {
+          selectedFolderPaths.add(selectedFile.inode_path.path);
+        }
+      });
+
+      console.log("🗂️ Selected folder paths:", Array.from(selectedFolderPaths));
+
+      // Helper to check if a file path has any selected parent
+      const hasSelectedParent = (filePath: string): boolean => {
+        if (!filePath) return false;
+
+        // Check if any selected folder path is a parent of this file
+        for (const selectedFolderPath of selectedFolderPaths) {
+          if (filePath.startsWith(selectedFolderPath + "/")) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Check all visible files (including in expanded folders)
+      const checkFiles = (fileList: (StackFile | StackDirectory)[]) => {
+        fileList.forEach((file) => {
+          if (file.resource_id && file.inode_path?.path) {
+            if (hasSelectedParent(file.inode_path.path)) {
+              newFilesWithSelectedParent.add(file.resource_id);
+            }
+          }
+
+          // Also check expanded folder contents
+          if (
+            file.inode_type === "directory" &&
+            file.resource_id &&
+            expandedFolders.has(file.resource_id)
+          ) {
+            const children = folderContents.get(file.resource_id);
+            if (children) {
+              checkFiles(children);
+            }
+          }
+        });
+      };
+
+      checkFiles(files);
+
+      console.log(
+        "🎯 Files with selected parent:",
+        Array.from(newFilesWithSelectedParent)
+      );
+      setFilesWithSelectedParent(newFilesWithSelectedParent);
+    };
+
+    computeFilesWithSelectedParent();
+  }, [selectedFiles, files, folderContents, expandedFolders]);
 
   // Reset pagination when search/filter changes
   useEffect(() => {
@@ -793,17 +885,22 @@ export default function FileExplorer() {
                       <Checkbox
                         checked={
                           files.length > 0 &&
-                          selectedFiles.size === files.length
+                          files.every(
+                            (file) =>
+                              selectedFiles.has(file.resource_id || "") ||
+                              filesWithSelectedParent.has(
+                                file.resource_id || ""
+                              )
+                          )
                         }
                         disabled={isOperationInProgress}
                         onCheckedChange={(checked: boolean) => {
                           if (checked) {
-                            const allFileIds = getAllFileIds(
-                              files,
-                              folderContents,
-                              expandedFolders
-                            );
-                            setSelectedFiles(new Set(allFileIds));
+                            // Only select top-level files, not children
+                            const topLevelFileIds = files
+                              .filter((file) => file.resource_id)
+                              .map((file) => file.resource_id!);
+                            setSelectedFiles(new Set(topLevelFileIds));
                           } else {
                             setSelectedFiles(new Set());
                           }
@@ -945,6 +1042,10 @@ export default function FileExplorer() {
                         fileIndexingStatus.get(file.resource_id || "") ||
                         "not_indexed";
 
+                      // Check if any parent is selected
+                      const recursiveParentIsSelected =
+                        filesWithSelectedParent.has(file.resource_id || "");
+
                       // Render skeleton for loading files
                       if (fileIsLoading) {
                         return (
@@ -1019,56 +1120,20 @@ export default function FileExplorer() {
                             }}
                           >
                             <Checkbox
-                              checked={isSelected}
-                              disabled={isOperationInProgress}
+                              checked={recursiveParentIsSelected || isSelected}
+                              disabled={
+                                isOperationInProgress ||
+                                recursiveParentIsSelected
+                              }
                               onCheckedChange={(checked: boolean) => {
+                                // Only allow changes if no parent is selected
+                                if (recursiveParentIsSelected) return;
+
                                 const newSelected = new Set(selectedFiles);
                                 if (checked) {
                                   newSelected.add(file.resource_id);
-
-                                  // If it's a folder, also select all visible children
-                                  if (
-                                    isFolder &&
-                                    file.resource_id &&
-                                    expandedFolders.has(file.resource_id)
-                                  ) {
-                                    const children = folderContents.get(
-                                      file.resource_id
-                                    );
-                                    if (children) {
-                                      const allChildIds = getAllFileIds(
-                                        children,
-                                        folderContents,
-                                        expandedFolders
-                                      );
-                                      allChildIds.forEach((id) =>
-                                        newSelected.add(id)
-                                      );
-                                    }
-                                  }
                                 } else {
                                   newSelected.delete(file.resource_id);
-
-                                  // If it's a folder, also deselect all visible children
-                                  if (
-                                    isFolder &&
-                                    file.resource_id &&
-                                    expandedFolders.has(file.resource_id)
-                                  ) {
-                                    const children = folderContents.get(
-                                      file.resource_id
-                                    );
-                                    if (children) {
-                                      const allChildIds = getAllFileIds(
-                                        children,
-                                        folderContents,
-                                        expandedFolders
-                                      );
-                                      allChildIds.forEach((id) =>
-                                        newSelected.delete(id)
-                                      );
-                                    }
-                                  }
                                 }
                                 setSelectedFiles(newSelected);
                               }}
