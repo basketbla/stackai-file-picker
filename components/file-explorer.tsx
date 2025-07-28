@@ -821,7 +821,7 @@ export default function FileExplorer() {
                         disabled={isOperationInProgress}
                         onCheckedChange={(checked: boolean) => {
                           if (checked) {
-                            // Only select top-level files, not children
+                            // Select all top-level files (parent-child deduplication is automatic)
                             const topLevelFileIds = files
                               .filter((file) => file.resource_id)
                               .map((file) => file.resource_id!);
@@ -1055,8 +1055,40 @@ export default function FileExplorer() {
                                 if (recursiveParentIsSelected) return;
 
                                 const newSelected = new Set(selectedFiles);
+
                                 if (checked) {
                                   newSelected.add(file.resource_id);
+
+                                  // If selecting a folder, unselect any of its children to prevent duplicates
+                                  if (isFolder && file.resource_id) {
+                                    const removeChildrenFromSelection = (
+                                      folderId: string
+                                    ) => {
+                                      const children =
+                                        folderContents.get(folderId);
+                                      if (children) {
+                                        children.forEach((child) => {
+                                          if (child.resource_id) {
+                                            newSelected.delete(
+                                              child.resource_id
+                                            );
+                                            // Recursively remove children of subfolders
+                                            if (
+                                              child.inode_type === "directory"
+                                            ) {
+                                              removeChildrenFromSelection(
+                                                child.resource_id
+                                              );
+                                            }
+                                          }
+                                        });
+                                      }
+                                    };
+
+                                    removeChildrenFromSelection(
+                                      file.resource_id
+                                    );
+                                  }
                                 } else {
                                   newSelected.delete(file.resource_id);
                                 }
