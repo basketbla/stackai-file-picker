@@ -353,6 +353,77 @@ export default function FileExplorer() {
     }
   };
 
+  // Helper function to invalidate folder cache for affected folders
+  const invalidateFolderCaches = (affectedFileIds: string[]) => {
+    setFolderContents((prevContents) => {
+      const newContents = new Map(prevContents);
+
+      // Check each cached folder to see if it contains any affected files
+      prevContents.forEach((contents, folderId) => {
+        const hasAffectedChild = contents.some(
+          (child) =>
+            child.resource_id && affectedFileIds.includes(child.resource_id)
+        );
+
+        if (hasAffectedChild) {
+          // Remove this folder's cache so it will be refetched with updated status
+          newContents.delete(folderId);
+        }
+      });
+
+      return newContents;
+    });
+  };
+
+  // Helper function to get all child file IDs from selected folders
+  const getAllChildFileIds = async (
+    selectedFileIds: string[]
+  ): Promise<string[]> => {
+    const allChildIds = new Set<string>();
+
+    for (const fileId of selectedFileIds) {
+      // Find the file object to check if it's a folder
+      const findFileInList = (
+        list: (StackFile | StackDirectory)[]
+      ): StackFile | StackDirectory | null => {
+        for (const file of list) {
+          if (file.resource_id === fileId) return file;
+          // Also check in folder contents
+          if (file.inode_type === "directory") {
+            const children = folderContents.get(file.resource_id || "");
+            if (children) {
+              const found = findFileInList(children);
+              if (found) return found;
+            }
+          }
+        }
+        return null;
+      };
+
+      const fileObj = findFileInList(files);
+      if (fileObj?.inode_type === "directory") {
+        // Get all children recursively from cache
+        const getChildrenRecursively = (folderId: string) => {
+          const children = folderContents.get(folderId);
+          if (children) {
+            children.forEach((child) => {
+              if (child.resource_id) {
+                allChildIds.add(child.resource_id);
+                if (child.inode_type === "directory") {
+                  getChildrenRecursively(child.resource_id);
+                }
+              }
+            });
+          }
+        };
+
+        getChildrenRecursively(fileId);
+      }
+    }
+
+    return Array.from(allChildIds);
+  };
+
   const handleIndexFiles = async () => {
     const selectedFileIds = Array.from(selectedFiles);
 
@@ -381,6 +452,18 @@ export default function FileExplorer() {
         updatedStatus.set(fileId, "indexed");
       });
       setFileIndexingStatus(updatedStatus);
+
+      // Get all child file IDs that may be affected
+      const childFileIds = await getAllChildFileIds(selectedFileIds);
+
+      // Update status for child files too (they inherit parent's indexed status)
+      childFileIds.forEach((childId) => {
+        updatedStatus.set(childId, "indexed");
+      });
+
+      // Invalidate folder caches that contain indexed folders or their children
+      invalidateFolderCaches([...selectedFileIds, ...childFileIds]);
+
       setSelectedFiles(new Set());
     } catch (error) {
       // Reset status on error for selected files
@@ -433,7 +516,20 @@ export default function FileExplorer() {
       selectedFileIds.forEach((fileId) => {
         newStatus.set(fileId, "not_indexed");
       });
+
+      // Get all child file IDs that may be affected
+      const childFileIds = await getAllChildFileIds(selectedFileIds);
+
+      // Update status for child files too (they inherit parent's unindexed status)
+      childFileIds.forEach((childId) => {
+        newStatus.set(childId, "not_indexed");
+      });
+
       setFileIndexingStatus(newStatus);
+
+      // Invalidate folder caches that contain unindexed folders or their children
+      invalidateFolderCaches([...selectedFileIds, ...childFileIds]);
+
       setSelectedFiles(new Set());
     } catch (error) {
       // Reset status on error for selected files
