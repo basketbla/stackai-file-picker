@@ -103,26 +103,6 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">
-                    Status
-                  </label>
-                  <div>
-                    <Badge
-                      variant={USER_SETTINGS.is_empty ? "outline" : "default"}
-                    >
-                      {USER_SETTINGS.is_empty ? "Empty" : "Contains Data"}
-                    </Badge>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
-                    Total Size
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {formatBytes(USER_SETTINGS.total_size)}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">
                     Created
                   </label>
                   <p className="text-sm text-gray-900">
@@ -328,7 +308,7 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-500">
+                      <label className="text-sm font-medium text-gray-500 mr-2">
                         Chunker Type
                       </label>
                       <Badge variant="secondary" className="capitalize">
