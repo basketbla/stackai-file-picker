@@ -30,7 +30,7 @@ const columnDefinitions = [
   {
     key: "name",
     header: "Name",
-    size: 400, // Flexible main column
+    size: 500, // Flexible main column
   },
   {
     key: "size",
@@ -468,12 +468,12 @@ export function FileTable({
                 >
                   <div
                     style={{ marginLeft: `${depth * 20}px` }}
-                    className="flex items-center space-x-2"
+                    className="flex items-center space-x-2 min-w-0"
                   >
                     <FileIcon file={file} />
                     {isFolder ? (
                       <button
-                        className="font-medium cursor-pointer hover:text-blue-600"
+                        className="font-medium cursor-pointer hover:text-blue-600 truncate text-left flex-1"
                         onClick={() =>
                           handleFolderClick(file as StackDirectory)
                         }
@@ -481,7 +481,7 @@ export function FileTable({
                         {file.inode_path?.path?.split("/").pop() || "Unnamed"}
                       </button>
                     ) : (
-                      <span className="font-medium">
+                      <span className="font-medium truncate flex-1">
                         {file.inode_path?.path?.split("/").pop() || "Unnamed"}
                       </span>
                     )}
